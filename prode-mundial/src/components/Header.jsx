@@ -14,7 +14,7 @@ export default function Header({ name, onSignOut, activeTab, onTabChange, isAdmi
           <div className="flex items-center gap-2">
             <span className="text-2xl">⚽</span>
             <div className="leading-tight">
-              <p className="font-black text-base tracking-tight">PRODE</p>
+              <p className="font-black text-base tracking-tight">PRODE 11</p>
               <p className="text-xs text-gray-400 font-medium">Mundial 2026</p>
             </div>
           </div>
