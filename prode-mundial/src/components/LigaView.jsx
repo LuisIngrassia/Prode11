@@ -8,14 +8,23 @@ function copyToClipboard(text) {
   navigator.clipboard?.writeText(text).catch(() => {})
 }
 
-// Banner de pago para miembro no confirmado
+function shareInvite(liga) {
+  const url  = `${window.location.origin}?join=${liga.codigo}`
+  const text = `¡Unite a mi sala "${liga.nombre}" del Prode Mundial 2026! ⚽🏆\nUsá el código: ${liga.codigo}\nO entrá directo:`
+  if (navigator.share) {
+    navigator.share({ title: `Prode - ${liga.nombre}`, text: text + '\n' + url, url })
+  } else {
+    copyToClipboard(`${text}\n${url}`)
+  }
+}
+
 function PayBanner({ liga, myMembership, onDeclare }) {
-  const [note, setNote]     = useState(myMembership?.note || '')
+  const [note,   setNote]   = useState(myMembership?.note || '')
   const [saving, setSaving] = useState(false)
-  const [sent, setSent]     = useState(false)
+  const [sent,   setSent]   = useState(false)
 
   if (!liga.entry_amount) return null
-  if (myMembership?.paid) return null
+  if (myMembership?.paid)  return null
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -30,7 +39,7 @@ function PayBanner({ liga, myMembership, onDeclare }) {
       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
         <p className="font-bold text-yellow-700">⏳ Pago declarado</p>
         <p className="text-sm text-gray-500 mt-1">
-          El creador de la sala debe confirmarlo para que veas la tabla.
+          El organizador confirmará tu transferencia para desbloquearte la tabla.
         </p>
       </div>
     )
@@ -62,98 +71,62 @@ function PayBanner({ liga, myMembership, onDeclare }) {
   )
 }
 
-// Panel de admin del creador
-function CreatorPanel({ liga, confirmed, pending, profiles, onConfirm, onRemove }) {
-  const [open, setOpen] = useState(false)
+// Panel del creator — solo info y código, sin confirmar pagos
+function CreatorInfo({ liga, confirmed, pending }) {
+  const [copied, setCopied] = useState(false)
 
-  const total = confirmed.length * (liga.entry_amount || 0)
+  function handleCopy() {
+    copyToClipboard(liga.codigo)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
-      >
-        <span className="font-bold text-gray-700 text-sm">
-          ⚙️ Admin de sala
-          {pending.length > 0 && (
-            <span className="ml-2 bg-yellow-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
-              {pending.length}
-            </span>
-          )}
-        </span>
-        <span className="text-gray-400">{open ? '▲' : '▼'}</span>
-      </button>
+    <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tu sala</p>
 
-      {open && (
-        <div className="border-t border-gray-100 p-4 space-y-4">
-          {/* Código para compartir */}
-          <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400 font-medium">Código de invitación</p>
-              <p className="font-mono font-black text-2xl text-gray-800 tracking-widest">{liga.codigo}</p>
-            </div>
-            <button
-              onClick={() => copyToClipboard(liga.codigo)}
-              className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-medium text-gray-700 transition"
-            >
-              Copiar
+      <div className="bg-gray-50 rounded-xl p-3">
+        <p className="text-xs text-gray-400 mb-1">Código de invitación</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-mono font-black text-2xl text-gray-800 tracking-widest">{liga.codigo}</p>
+          <div className="flex gap-1.5">
+            <button onClick={handleCopy}
+              className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-medium text-gray-700 transition">
+              {copied ? '✓' : 'Copiar'}
+            </button>
+            <button onClick={() => shareInvite(liga)}
+              className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium transition">
+              Compartir
             </button>
           </div>
-
-          {liga.entry_amount > 0 && (
-            <div className="text-sm text-gray-500">
-              Recaudado: <span className="font-bold text-gray-800">{fmt(total)}</span>
-            </div>
-          )}
-
-          {/* Pendientes */}
-          {pending.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pendientes</p>
-              <div className="space-y-2">
-                {pending.map(m => (
-                  <div key={m.user_id} className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{profiles[m.user_id] || '—'}</p>
-                      {m.note && <p className="text-xs text-gray-400 truncate">{m.note}</p>}
-                    </div>
-                    <button onClick={() => onConfirm(m.user_id)}
-                      className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition">✓</button>
-                    <button onClick={() => onRemove(m.user_id)}
-                      className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition">✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Confirmados */}
-          {confirmed.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Confirmados ({confirmed.length})</p>
-              <div className="space-y-1">
-                {confirmed.map(m => (
-                  <div key={m.user_id} className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-1.5">
-                    <span className="text-sm text-gray-700">{profiles[m.user_id] || '—'}</span>
-                    <span className="text-green-600 text-sm">✓</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="bg-green-50 rounded-lg p-2">
+          <p className="text-xl font-black text-green-700">{confirmed.length}</p>
+          <p className="text-xs text-gray-400">confirmados</p>
+        </div>
+        <div className="bg-yellow-50 rounded-lg p-2">
+          <p className="text-xl font-black text-yellow-700">{pending.length}</p>
+          <p className="text-xs text-gray-400">pendientes</p>
+        </div>
+      </div>
+
+      {liga.entry_amount > 0 && (
+        <p className="text-xs text-gray-400 text-center">
+          Los pagos son confirmados por el organizador del prode
+        </p>
       )}
     </div>
   )
 }
 
-// Pozo de premios de la sala
 function LigaPrizePool({ liga, confirmedCount, leaderboard }) {
   if (!liga.entry_amount) return null
 
   const prizes = calcLigaPrizes(liga, confirmedCount)
-  const top3 = leaderboard.slice(0, 3)
+  const top3   = leaderboard.slice(0, 3)
 
   return (
     <div className="bg-gray-900 text-white rounded-2xl p-5">
@@ -164,9 +137,9 @@ function LigaPrizePool({ liga, confirmedCount, leaderboard }) {
       </p>
       <div className="grid grid-cols-3 gap-2 mt-4">
         {[
-          { emoji: '🥇', label: '1°', amount: prizes.first, player: top3[0]?.name },
+          { emoji: '🥇', label: '1°', amount: prizes.first,  player: top3[0]?.name },
           { emoji: '🥈', label: '2°', amount: prizes.second, player: top3[1]?.name },
-          { emoji: '🥉', label: '3°', amount: prizes.third, player: top3[2]?.name },
+          { emoji: '🥉', label: '3°', amount: prizes.third,  player: top3[2]?.name },
         ].map(({ emoji, label, amount, player }) => (
           <div key={label} className="bg-gray-800 rounded-xl p-3 text-center">
             <p className="text-lg">{emoji}</p>
@@ -180,16 +153,13 @@ function LigaPrizePool({ liga, confirmedCount, leaderboard }) {
 }
 
 export default function LigaView({ liga, leaderboard, userId, onBack }) {
-  const {
-    confirmed, pending, profiles, myMembership, loading,
-    confirmMember, removeMember, declarePayment,
-  } = useLigaDetail(liga.id, userId)
+  const { confirmed, pending, profiles, myMembership, loading, declarePayment } =
+    useLigaDetail(liga.id, userId)
 
-  const isCreator = liga.creator_id === userId
-  const canSeeLeaderboard = myMembership?.paid || !liga.entry_amount || isCreator
+  const isCreator       = liga.creator_id === userId
+  const canSeeLeaderboard = myMembership?.paid || !liga.entry_amount
 
-  // Leaderboard filtrado a miembros confirmados de esta sala
-  const confirmedIds = new Set(confirmed.map(m => m.user_id))
+  const confirmedIds    = new Set(confirmed.map(m => m.user_id))
   const ligaLeaderboard = leaderboard.filter(p => confirmedIds.has(p.id))
 
   return (
@@ -206,8 +176,8 @@ export default function LigaView({ liga, leaderboard, userId, onBack }) {
         </div>
         {!isCreator && (
           <button
-            onClick={() => copyToClipboard(liga.codigo)}
-            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium px-3 py-1.5 rounded-lg transition"
+            onClick={() => shareInvite(liga)}
+            className="text-xs bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-lg transition"
           >
             Compartir
           </button>
@@ -217,21 +187,14 @@ export default function LigaView({ liga, leaderboard, userId, onBack }) {
       {/* Pozo */}
       <LigaPrizePool liga={liga} confirmedCount={confirmed.length} leaderboard={ligaLeaderboard} />
 
-      {/* Banner pago (si no pagué) */}
-      {!loading && !isCreator && (
-        <PayBanner liga={liga} myMembership={myMembership} onDeclare={declarePayment} />
+      {/* Info del creator (sin botones de confirmar) */}
+      {isCreator && !loading && (
+        <CreatorInfo liga={liga} confirmed={confirmed} pending={pending} />
       )}
 
-      {/* Admin panel (solo creator) */}
-      {isCreator && (
-        <CreatorPanel
-          liga={liga}
-          confirmed={confirmed}
-          pending={pending}
-          profiles={profiles}
-          onConfirm={confirmMember}
-          onRemove={removeMember}
-        />
+      {/* Banner de pago para quien no pagó (incluyendo el creator) */}
+      {!loading && (
+        <PayBanner liga={liga} myMembership={myMembership} onDeclare={declarePayment} />
       )}
 
       {/* Leaderboard */}

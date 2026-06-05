@@ -1,6 +1,7 @@
 const TABS = [
   { id: 'grupos',     label: 'Grupos',     icon: '⬡' },
   { id: 'bracket',    label: 'Fase Final', icon: '🏆' },
+  { id: 'tabla',      label: 'Tabla',      icon: '📊' },
   { id: 'salas',      label: 'Salas',      icon: '🏟' },
   { id: 'especiales', label: 'Especiales', icon: '⭐' },
   { id: 'puntos',     label: 'Puntos',     icon: 'ℹ' },

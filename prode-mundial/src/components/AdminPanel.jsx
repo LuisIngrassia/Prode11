@@ -1,6 +1,102 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import ResultsAdmin from './ResultsAdmin'
+
+function LigasPendingPanel() {
+  const [items,    setItems]    = useState([])
+  const [profiles, setProfiles] = useState({})
+  const [loading,  setLoading]  = useState(true)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('liga_members')
+      .select('*, ligas(nombre, entry_amount)')
+      .order('liga_id')
+    setItems(data || [])
+
+    const ids = (data || []).map(m => m.user_id)
+    if (ids.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+      const map = {}
+      profs?.forEach(p => { map[p.id] = p.name })
+      setProfiles(map)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const pending   = items.filter(m => !m.paid)
+  const confirmed = items.filter(m =>  m.paid)
+
+  async function confirm(ligaId, userId) {
+    await supabase.from('liga_members')
+      .update({ paid: true, paid_at: new Date().toISOString() })
+      .eq('liga_id', ligaId).eq('user_id', userId)
+    await load()
+  }
+
+  async function reject(ligaId, userId) {
+    await supabase.from('liga_members')
+      .delete().eq('liga_id', ligaId).eq('user_id', userId)
+    await load()
+  }
+
+  if (loading) return <p className="text-center text-gray-400 py-8 text-sm">Cargando...</p>
+
+  function MemberRow({ m, isPending }) {
+    const [busy, setBusy] = useState(false)
+    return (
+      <div className={`flex items-center gap-3 p-3 rounded-xl border ${isPending ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-800 truncate">{profiles[m.user_id] || '—'}</p>
+          <p className="text-xs text-gray-500 truncate">
+            {m.ligas?.nombre} · {m.note || 'Sin referencia'}
+          </p>
+        </div>
+        {m.ligas?.entry_amount > 0 && (
+          <p className="font-black text-gray-800 flex-shrink-0">
+            ${Number(m.ligas.entry_amount).toLocaleString('es-AR')}
+          </p>
+        )}
+        {isPending ? (
+          <div className="flex gap-1.5 flex-shrink-0">
+            <button disabled={busy} onClick={async () => { setBusy(true); await confirm(m.liga_id, m.user_id) }}
+              className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50">✓</button>
+            <button disabled={busy} onClick={async () => { setBusy(true); await reject(m.liga_id, m.user_id) }}
+              className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50">✕</button>
+          </div>
+        ) : (
+          <span className="text-green-600 text-lg flex-shrink-0">✓</span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+          ⏳ Pendientes
+          {pending.length > 0 && (
+            <span className="bg-yellow-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pending.length}</span>
+          )}
+        </h2>
+        {pending.length === 0
+          ? <p className="text-sm text-gray-400 bg-white border border-gray-100 rounded-xl p-4 text-center">No hay pagos pendientes</p>
+          : <div className="space-y-2">{pending.map(m => <MemberRow key={`${m.liga_id}-${m.user_id}`} m={m} isPending />)}</div>
+        }
+      </div>
+      <div>
+        <h2 className="font-bold text-gray-700 mb-3">✅ Confirmados ({confirmed.length})</h2>
+        {confirmed.length === 0
+          ? <p className="text-sm text-gray-400 bg-white border border-gray-100 rounded-xl p-4 text-center">Aún no hay confirmados</p>
+          : <div className="space-y-2">{confirmed.map(m => <MemberRow key={`${m.liga_id}-${m.user_id}`} m={m} isPending={false} />)}</div>
+        }
+      </div>
+    </div>
+  )
+}
 
 function fmt(n) {
   return '$' + Number(n).toLocaleString('es-AR')
@@ -74,12 +170,12 @@ export default function AdminPanel({ entries, confirmed, pending, totalGross, or
   return (
     <div className="space-y-4">
       {/* Sub-tabs */}
-      <div className="flex gap-2 bg-gray-200 p-1 rounded-xl">
-        {[{ id: 'pozo', label: '💰 Pozo' }, { id: 'resultados', label: '⚽ Resultados' }].map(t => (
+      <div className="flex gap-1 bg-gray-200 p-1 rounded-xl">
+        {[{ id: 'pozo', label: '💰 Pozo' }, { id: 'salas', label: '🏟 Salas' }, { id: 'resultados', label: '⚽ Resultados' }].map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
               tab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -91,6 +187,8 @@ export default function AdminPanel({ entries, confirmed, pending, totalGross, or
       {tab === 'resultados' && (
         <ResultsAdmin matches={matches} onSaved={onResultSaved} />
       )}
+
+      {tab === 'salas' && <LigasPendingPanel />}
 
       {tab === 'pozo' && <div className="space-y-6">
       {/* Stats */}

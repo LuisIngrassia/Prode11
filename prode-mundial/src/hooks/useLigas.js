@@ -31,9 +31,9 @@ export function useLigas(userId) {
       .select().single()
     if (error) return { error }
 
-    // Creator entra automáticamente como pago confirmado
+    // Creator entra pero también debe pagar — paid: false como cualquier miembro
     await supabase.from('liga_members').insert({
-      liga_id: data.id, user_id: userId, paid: true, paid_at: new Date().toISOString()
+      liga_id: data.id, user_id: userId, paid: false
     })
     await load()
     return { data }

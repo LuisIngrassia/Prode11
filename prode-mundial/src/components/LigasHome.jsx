@@ -58,8 +58,8 @@ function CreateForm({ onCreate, onCancel }) {
   )
 }
 
-function JoinForm({ onJoin, onCancel }) {
-  const [codigo, setCodigo] = useState('')
+function JoinForm({ onJoin, onCancel, initialCode = '' }) {
+  const [codigo, setCodigo] = useState(initialCode)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -135,11 +135,11 @@ function LigaCard({ liga, onSelect }) {
   )
 }
 
-export default function LigasHome({ ligas, onCreate, onJoin, onSelect }) {
-  const [view, setView] = useState('list') // 'list' | 'create' | 'join'
+export default function LigasHome({ ligas, onCreate, onJoin, onSelect, initialJoinCode }) {
+  const [view, setView] = useState(initialJoinCode ? 'join' : 'list')
 
   if (view === 'create') return <CreateForm onCreate={async (d) => { const r = await onCreate(d); if (!r.error) setView('list'); return r }} onCancel={() => setView('list')} />
-  if (view === 'join')   return <JoinForm   onJoin={async (c)  => { const r = await onJoin(c);   if (!r.error) setView('list'); return r }} onCancel={() => setView('list')} />
+  if (view === 'join')   return <JoinForm   initialCode={initialJoinCode} onJoin={async (c)  => { const r = await onJoin(c);   if (!r.error) setView('list'); return r }} onCancel={() => setView('list')} />
 
   return (
     <div className="space-y-4">
