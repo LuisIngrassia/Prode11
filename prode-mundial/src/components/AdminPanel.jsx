@@ -205,7 +205,7 @@ export default function AdminPanel({ entries, confirmed, pending, totalGross, or
           </div>
           <div className="bg-yellow-800 rounded-xl p-3">
             <p className="text-2xl font-black">${organizerCut.toLocaleString('es-AR')}</p>
-            <p className="text-xs text-yellow-300">tu corte (12%)</p>
+            <p className="text-xs text-yellow-300">tu corte (10%)</p>
           </div>
         </div>
       </div>

@@ -151,7 +151,7 @@ export default function PrizePool({ leaderboard, myEntry, confirmed, pending, to
         <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Pozo acumulado</p>
         <p className="text-5xl font-black tracking-tight">{fmt(netPool)}</p>
         <p className="text-gray-400 text-sm mt-1">
-          {fmt(totalGross)} recaudados · {fmt(organizerCut)} admin (12%)
+          {fmt(totalGross)} recaudados · {fmt(organizerCut)} admin (10%)
         </p>
 
         <div className="grid grid-cols-3 gap-3 mt-4">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-const ORGANIZER_CUT = 0.12   // 12%
+const ORGANIZER_CUT = 0.10   // 10%
 const MULTIPLIERS   = [3, 1.5, 0.5]  // 1°, 2°, 3°
 
 export function calculatePrizes(confirmedEntries, leaderboard, netPool) {
