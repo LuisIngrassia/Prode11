@@ -41,13 +41,17 @@ export default function App() {
   const { matches, refreshMatches } = useMatches()
   const { predictions, savePrediction } = usePredictions(user?.id)
   const { special, saveSpecial }        = useSpecialPredictions(user?.id)
-  const leaderboard = useLeaderboard()
+  const leaderboard    = useLeaderboard()
   const { ligas, createLiga, joinLiga, refresh: refreshLigas } = useLigas(user?.id)
   const {
     myEntry, confirmed, pending,
     totalGross, organizerCut, netPool,
     submitEntry, confirmEntry, rejectEntry,
   } = useEntries(user?.id)
+
+  // Solo los usuarios con pago confirmado aparecen en la tabla global
+  const confirmedIds    = new Set(confirmed.map(e => e.user_id))
+  const paidLeaderboard = leaderboard.filter(e => confirmedIds.has(e.id))
 
   if (loading) {
     return (
@@ -124,12 +128,12 @@ export default function App() {
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">
                       Tabla global
                     </p>
-                    <Leaderboard leaderboard={leaderboard} currentUserId={user.id} />
+                    <Leaderboard leaderboard={paidLeaderboard} currentUserId={user.id} />
                   </div>
 
                   {/* Pozo abajo (sin formulario, solo stats) */}
                   <PrizePool
-                    leaderboard={leaderboard}
+                    leaderboard={paidLeaderboard}
                     myEntry={myEntry}
                     confirmed={confirmed}
                     pending={pending}
@@ -155,7 +159,7 @@ export default function App() {
 
                   {/* Pozo con formulario */}
                   <PrizePool
-                    leaderboard={leaderboard}
+                    leaderboard={paidLeaderboard}
                     myEntry={myEntry}
                     confirmed={confirmed}
                     pending={pending}

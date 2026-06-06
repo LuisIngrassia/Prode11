@@ -4,17 +4,20 @@ import ResultsAdmin from './ResultsAdmin'
 
 function LigasPendingPanel() {
   const [items,    setItems]    = useState([])
+  const [ligas,    setLigas]    = useState([])
   const [profiles, setProfiles] = useState({})
   const [loading,  setLoading]  = useState(true)
+  const [deleting, setDeleting] = useState(null)
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('liga_members')
-      .select('*, ligas(nombre, entry_amount)')
-      .order('liga_id')
-    setItems(data || [])
+    const [{ data: members }, { data: allLigas }] = await Promise.all([
+      supabase.from('liga_members').select('*, ligas(id, nombre, entry_amount)').order('liga_id'),
+      supabase.from('ligas').select('id, nombre, entry_amount, codigo').order('created_at'),
+    ])
+    setItems(members || [])
+    setLigas(allLigas || [])
 
-    const ids = (data || []).map(m => m.user_id)
+    const ids = (members || []).map(m => m.user_id)
     if (ids.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
       const map = {}
@@ -23,6 +26,14 @@ function LigasPendingPanel() {
     }
     setLoading(false)
   }, [])
+
+  async function deleteLiga(ligaId, nombre) {
+    if (!confirm(`¿Borrar la sala "${nombre}"? Se eliminarán todos sus miembros.`)) return
+    setDeleting(ligaId)
+    await supabase.from('ligas').delete().eq('id', ligaId)
+    await load()
+    setDeleting(null)
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -75,6 +86,40 @@ function LigasPendingPanel() {
 
   return (
     <div className="space-y-5">
+
+      {/* Lista de salas con opción de borrar */}
+      <div>
+        <h2 className="font-bold text-gray-700 mb-3">🏟 Salas ({ligas.length})</h2>
+        {ligas.length === 0
+          ? <p className="text-sm text-gray-400 bg-white border border-gray-100 rounded-xl p-4 text-center">No hay salas creadas</p>
+          : <div className="space-y-2">
+              {ligas.map(liga => {
+                const memberCount = items.filter(m => m.liga_id === liga.id).length
+                const confirmedCount = items.filter(m => m.liga_id === liga.id && m.paid).length
+                return (
+                  <div key={liga.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-800 truncate">{liga.nombre}</p>
+                      <p className="text-xs text-gray-400 font-mono">
+                        #{liga.codigo}
+                        {liga.entry_amount > 0 && ` · $${Number(liga.entry_amount).toLocaleString('es-AR')}`}
+                        {` · ${confirmedCount}/${memberCount} confirmados`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => deleteLiga(liga.id, liga.nombre)}
+                      disabled={deleting === liga.id}
+                      className="text-xs bg-red-100 hover:bg-red-500 hover:text-white text-red-600 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+                    >
+                      {deleting === liga.id ? '…' : '🗑 Borrar'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+        }
+      </div>
+
       <div>
         <h2 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
           ⏳ Pendientes
