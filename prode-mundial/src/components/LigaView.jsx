@@ -10,12 +10,8 @@ function copyToClipboard(text) {
 
 function shareInvite(liga) {
   const url  = `${window.location.origin}?join=${liga.codigo}`
-  const text = `¡Unite a mi sala "${liga.nombre}" del Prode Mundial 2026! ⚽🏆\nUsá el código: ${liga.codigo}\nO entrá directo:`
-  if (navigator.share) {
-    navigator.share({ title: `Prode - ${liga.nombre}`, text: text + '\n' + url, url })
-  } else {
-    copyToClipboard(`${text}\n${url}`)
-  }
+  const text = `Unite a mi sala *${liga.nombre}* y hace tus predicciones del mundial! 🌎⚽\n👉 ${url}`
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
 }
 
 function PayBanner({ liga, myMembership, onDeclare }) {
