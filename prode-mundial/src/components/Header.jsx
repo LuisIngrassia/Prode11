@@ -3,7 +3,7 @@ const TABS = [
   { id: 'bracket',    label: 'Fase Final', icon: '🏆' },
   { id: 'tabla',      label: 'Tabla',      icon: '📊' },
   { id: 'salas',      label: 'Salas',      icon: '🏟' },
-  { id: 'especiales', label: 'Especiales', icon: '⭐' },
+  { id: 'especiales', label: 'Gran Final', icon: '⭐' },
   { id: 'puntos',     label: 'Puntos',     icon: 'ℹ' },
 ]
 

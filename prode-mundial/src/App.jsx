@@ -141,7 +141,19 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  {/* Pozo con formulario primero */}
+                  {/* CTA arriba de todo si nunca depositó */}
+                  {!myEntry && (
+                    <div className="bg-green-600 text-white rounded-2xl p-5">
+                      <p className="text-2xl font-black mb-1">💰 Entrar al pozo</p>
+                      <p className="text-sm text-green-100 mb-0.5">
+                        Transferí mínimo <span className="font-bold text-white">${Number(import.meta.env.VITE_MONTO_MINIMO || 1000).toLocaleString('es-AR')}</span> al alias{' '}
+                        <span className="font-mono font-bold text-white">{import.meta.env.VITE_ALIAS_PAGO}</span>
+                      </p>
+                      <p className="text-xs text-green-200">y declaralo abajo para desbloquear la tabla ↓</p>
+                    </div>
+                  )}
+
+                  {/* Pozo con formulario */}
                   <PrizePool
                     leaderboard={leaderboard}
                     myEntry={myEntry}
