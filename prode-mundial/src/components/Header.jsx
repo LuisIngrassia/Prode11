@@ -1,7 +1,7 @@
 const TABS = [
   { id: 'grupos',     label: 'Grupos',     icon: '⬡' },
-  { id: 'bracket',    label: 'Fase Final', icon: '🏆' },
-  { id: 'tabla',      label: 'Tabla',      icon: '📊' },
+  { id: 'bracket',    label: 'Llaves', icon: '🏆' },
+  { id: 'tabla',      label: 'Tabla General',      icon: '📊' },
   { id: 'salas',      label: 'Salas',      icon: '🏟' },
   { id: 'especiales', label: 'Gran Final', icon: '⭐' },
   { id: 'puntos',     label: 'Puntos',     icon: 'ℹ' },

@@ -10,7 +10,7 @@ function copyToClipboard(text) {
 
 function shareInvite(liga) {
   const url  = `${window.location.origin}?join=${liga.codigo}`
-  const text = `Unite a mi sala *${liga.nombre}* y hace tus predicciones del mundial! 🌎⚽\n👉 ${url}`
+  const text = `Unite a mi sala *${liga.nombre}* y hace tus predicciones del mundial! \n👉 ${url}`
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
 }
 
