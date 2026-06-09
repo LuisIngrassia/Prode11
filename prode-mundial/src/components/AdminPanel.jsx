@@ -12,7 +12,7 @@ function LigasPendingPanel() {
   const load = useCallback(async () => {
     const [{ data: members }, { data: allLigas }] = await Promise.all([
       supabase.from('liga_members').select('*, ligas(id, nombre, entry_amount)').order('liga_id'),
-      supabase.from('ligas').select('id, nombre, entry_amount, codigo').order('created_at'),
+      supabase.from('ligas').select('id, nombre, entry_amount, codigo, organizer_cut').order('created_at'),
     ])
     setItems(members || [])
     setLigas(allLigas || [])
@@ -26,6 +26,11 @@ function LigasPendingPanel() {
     }
     setLoading(false)
   }, [])
+
+  async function updateLigaCut(ligaId, cut) {
+    await supabase.from('ligas').update({ organizer_cut: cut }).eq('id', ligaId)
+    await load()
+  }
 
   async function deleteLiga(ligaId, nombre) {
     if (!confirm(`¿Borrar la sala "${nombre}"? Se eliminarán todos sus miembros.`)) return
@@ -54,6 +59,54 @@ function LigasPendingPanel() {
   }
 
   if (loading) return <p className="text-center text-gray-400 py-8 text-sm">Cargando...</p>
+
+  function LigaCutEditor({ liga }) {
+    const [enabled, setEnabled] = useState((liga.organizer_cut ?? 0) > 0)
+    const [pct, setPct]         = useState(liga.organizer_cut > 0 ? liga.organizer_cut : 10)
+    const [saving, setSaving]   = useState(false)
+    const [saved,  setSaved]    = useState(false)
+
+    async function handleSave() {
+      setSaving(true)
+      const cut = enabled ? Math.max(0, Math.min(100, Number(pct))) : 0
+      await updateLigaCut(liga.id, cut)
+      setSaving(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    }
+
+    return (
+      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+        <span className="text-xs text-gray-500 flex-shrink-0">Comisión:</span>
+        <button
+          type="button"
+          onClick={() => setEnabled(e => !e)}
+          className={`relative inline-flex w-9 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+        </button>
+        {enabled ? (
+          <>
+            <input
+              type="number" min="1" max="100" value={pct}
+              onChange={e => setPct(e.target.value)}
+              className="w-14 text-xs border border-gray-300 rounded px-2 py-0.5 text-center"
+            />
+            <span className="text-xs text-gray-500">%</span>
+          </>
+        ) : (
+          <span className="text-xs text-gray-400">Sin comisión</span>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="ml-auto text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg transition disabled:opacity-50"
+        >
+          {saving ? '…' : saved ? '✓ Listo' : 'Guardar'}
+        </button>
+      </div>
+    )
+  }
 
   function MemberRow({ m, isPending }) {
     const [busy, setBusy] = useState(false)
@@ -97,22 +150,25 @@ function LigasPendingPanel() {
                 const memberCount = items.filter(m => m.liga_id === liga.id).length
                 const confirmedCount = items.filter(m => m.liga_id === liga.id && m.paid).length
                 return (
-                  <div key={liga.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 truncate">{liga.nombre}</p>
-                      <p className="text-xs text-gray-400 font-mono">
-                        #{liga.codigo}
-                        {liga.entry_amount > 0 && ` · $${Number(liga.entry_amount).toLocaleString('es-AR')}`}
-                        {` · ${confirmedCount}/${memberCount} confirmados`}
-                      </p>
+                  <div key={liga.id} className="p-3 bg-white rounded-xl border border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-800 truncate">{liga.nombre}</p>
+                        <p className="text-xs text-gray-400 font-mono">
+                          #{liga.codigo}
+                          {liga.entry_amount > 0 && ` · $${Number(liga.entry_amount).toLocaleString('es-AR')}`}
+                          {` · ${confirmedCount}/${memberCount} confirmados`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteLiga(liga.id, liga.nombre)}
+                        disabled={deleting === liga.id}
+                        className="text-xs bg-red-100 hover:bg-red-500 hover:text-white text-red-600 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+                      >
+                        {deleting === liga.id ? '…' : '🗑 Borrar'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => deleteLiga(liga.id, liga.nombre)}
-                      disabled={deleting === liga.id}
-                      className="text-xs bg-red-100 hover:bg-red-500 hover:text-white text-red-600 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50 flex-shrink-0"
-                    >
-                      {deleting === liga.id ? '…' : '🗑 Borrar'}
-                    </button>
+                    {liga.entry_amount > 0 && <LigaCutEditor liga={liga} />}
                   </div>
                 )
               })}

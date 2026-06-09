@@ -121,7 +121,7 @@ export function useLigaDetail(ligaId, userId) {
 
 export function calcLigaPrizes(liga, confirmedCount) {
   const gross = confirmedCount * (liga.entry_amount || 0)
-  const cut   = Math.floor(gross * (liga.organizer_cut || 10) / 100)
+  const cut   = Math.floor(gross * (liga.organizer_cut ?? 0) / 100)
   const net   = gross - cut
   return {
     gross, cut, net,
