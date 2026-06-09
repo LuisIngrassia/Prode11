@@ -9,8 +9,6 @@ import { useProfile } from './hooks/useProfile'
 import { useLigas } from './hooks/useLigas'
 import LoginScreen from './components/LoginScreen'
 import Header from './components/Header'
-import GroupStage from './components/GroupStage'
-import Bracket from './components/Bracket'
 import PreTournament from './components/PreTournament'
 import PointsInfo from './components/PointsInfo'
 import AdminPanel from './components/AdminPanel'
@@ -19,12 +17,15 @@ import TablaPaywall from './components/TablaPaywall'
 import PrizePool from './components/PrizePool'
 import LigasHome from './components/LigasHome'
 import LigaView from './components/LigaView'
+import OnboardingTutorial from './components/OnboardingTutorial'
+import PrediccionesTab from './components/PrediccionesTab'
 
 export default function App() {
   const { user, loading, signIn, signUp, signOut } = useAuth()
   const [activeTab, setActiveTab]       = useState('grupos')
   const [selectedLiga, setSelectedLiga] = useState(null)
   const [initialJoinCode, setInitialJoinCode] = useState('')
+  const [showTutorial, setShowTutorial] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -36,6 +37,12 @@ export default function App() {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
+
+  useEffect(() => {
+    if (user && !localStorage.getItem('prode_tutorial_seen')) {
+      setShowTutorial(true)
+    }
+  }, [user])
 
   const profile  = useProfile(user?.id)
   const { matches, refreshMatches } = useMatches()
@@ -84,12 +91,9 @@ export default function App() {
         isAdmin={isAdmin}
       />
 
-      <main className="max-w-5xl mx-auto px-4 py-5">
+      <main className="max-w-7xl mx-auto px-4 py-5">
         {activeTab === 'grupos' && (
-          <GroupStage matches={matches} predictions={predictions} onSave={savePrediction} />
-        )}
-        {activeTab === 'bracket' && (
-          <Bracket matches={matches} predictions={predictions} onSave={savePrediction} />
+          <PrediccionesTab matches={matches} predictions={predictions} onSave={savePrediction} />
         )}
         {activeTab === 'salas' && (
           selectedLiga
@@ -201,6 +205,10 @@ export default function App() {
           />
         )}
       </main>
+
+      {showTutorial && (
+        <OnboardingTutorial onDone={() => setShowTutorial(false)} />
+      )}
     </div>
   )
 }
