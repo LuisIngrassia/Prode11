@@ -94,6 +94,15 @@ function DarkCard({ match, prediction, onSave, accentColor, isFinal = false, is3
   const [pa, setPa]         = useState(prediction?.pred_away ?? '')
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
+  const [synced, setSynced] = useState(prediction != null)
+
+  useEffect(() => {
+    if (!synced && prediction?.pred_home != null) {
+      setPh(prediction.pred_home)
+      setPa(prediction.pred_away ?? '')
+      setSynced(true)
+    }
+  }, [prediction?.pred_home, prediction?.pred_away, synced])
 
   const hasResult  = match.result_home != null && match.result_away != null
   const locked     = isMatchLocked(match)
