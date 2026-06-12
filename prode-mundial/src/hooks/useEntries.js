@@ -33,8 +33,14 @@ export function useEntries(userId) {
 
   useEffect(() => {
     if (!userId) return
+    let cancelled = false
     supabase.from('entries').select('*').order('created_at')
-      .then(({ data }) => { setEntries(data || []); setLoading(false) })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        setEntries(error ? [] : (data || []))
+        setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [userId])
 
   const confirmed = entries.filter(e => e.confirmed)

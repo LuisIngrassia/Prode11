@@ -6,8 +6,13 @@ export function useSpecialPredictions(userId) {
 
   useEffect(() => {
     if (!userId) return
+    let cancelled = false
     supabase.from('special_predictions').select('*').eq('user_id', userId).single()
-      .then(({ data }) => { if (data) setSpecial(data) })
+      .then(({ data, error }) => {
+        if (cancelled || error) return
+        if (data) setSpecial(data)
+      })
+    return () => { cancelled = true }
   }, [userId])
 
   async function saveSpecial(champion, subchampion) {
