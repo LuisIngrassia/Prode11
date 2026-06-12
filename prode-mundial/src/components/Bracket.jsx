@@ -90,17 +90,33 @@ function DarkTeamRow({ name, score, val, setVal, onBlur, hasResult, canPredict, 
 
 // ── Shared dark match card ─────────────────────────────────
 function DarkCard({ match, prediction, onSave, accentColor, isFinal = false, is3rd = false, compact = true }) {
-  const [ph, setPh] = useState(prediction?.pred_home ?? '')
-  const [pa, setPa] = useState(prediction?.pred_away ?? '')
+  const [ph, setPh]         = useState(prediction?.pred_home ?? '')
+  const [pa, setPa]         = useState(prediction?.pred_away ?? '')
+  const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
 
   const hasResult  = match.result_home != null && match.result_away != null
   const locked     = isMatchLocked(match)
   const inProgress = isMatchInProgress(match)
   const canPredict = isRealTeam(match.home) && isRealTeam(match.away) && !locked
 
+  const isDirty = canPredict && ph !== '' && pa !== '' && (
+    String(ph) !== String(prediction?.pred_home ?? '') ||
+    String(pa) !== String(prediction?.pred_away ?? '')
+  )
+
   async function handleBlur() {
-    if (ph === '' || pa === '') return
+    if (!compact || ph === '' || pa === '') return
     await onSave(match.id, +ph, +pa)
+  }
+
+  async function handleSave() {
+    if (!isDirty) return
+    setSaving(true)
+    await onSave(match.id, +ph, +pa)
+    setSaving(false)
+    setJustSaved(true)
+    setTimeout(() => setJustSaved(false), 2000)
   }
 
   const homeWins = hasResult && match.result_home > match.result_away
@@ -126,12 +142,26 @@ function DarkCard({ match, prediction, onSave, accentColor, isFinal = false, is3
         {inProgress && <span style={{ fontSize: compact ? 7 : 9, fontWeight: 800, color: '#f97316' }}>● VIVO</span>}
         {ptsBg && <span style={{ marginLeft: 'auto', fontSize: compact ? 7 : 9, fontWeight: 800, color: 'white', background: ptsBg, padding: '1px 4px', borderRadius: 3 }}>{pts}pt</span>}
       </div>
-      <DarkTeamRow name={match.home} score={match.result_home} val={ph} setVal={setPh}
+      <DarkTeamRow name={match.home} score={match.result_home} val={ph} setVal={v => { setPh(v); setJustSaved(false) }}
                    onBlur={handleBlur} hasResult={hasResult} canPredict={canPredict} locked={locked}
                    border isWinner={homeWins} isFinal={isFinal} is3rd={is3rd} compact={compact} />
-      <DarkTeamRow name={match.away} score={match.result_away} val={pa} setVal={setPa}
+      <DarkTeamRow name={match.away} score={match.result_away} val={pa} setVal={v => { setPa(v); setJustSaved(false) }}
                    onBlur={handleBlur} hasResult={hasResult} canPredict={canPredict} locked={locked}
                    isWinner={awayWins} isFinal={isFinal} is3rd={is3rd} compact={compact} />
+      {!compact && canPredict && (
+        <div style={{ borderTop: '1px solid rgba(255,255,255,.06)', padding: '6px 8px' }}>
+          {justSaved ? (
+            <div style={{ textAlign: 'center', color: '#4ade80', fontSize: 12, fontWeight: 700 }}>✓ Guardado</div>
+          ) : isDirty ? (
+            <button onClick={handleSave} disabled={saving}
+                    style={{ width: '100%', background: '#16a34a', color: 'white', fontSize: 12, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? '…' : 'Guardar predicción'}
+            </button>
+          ) : prediction?.pred_home != null ? (
+            <div style={{ textAlign: 'center', color: '#4b5563', fontSize: 11 }}>✓ Guardado</div>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }

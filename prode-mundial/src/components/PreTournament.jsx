@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { FLAGS, GROUPS } from '../data/teams'
-import { isTournamentStarted } from '../utils/matchTime'
+import { isMatchLocked, isTournamentStarted } from '../utils/matchTime'
 
 const TEAMS = Object.values(GROUPS).flat().sort()
 
-export default function PreTournament({ special, onSave }) {
+export default function PreTournament({ special, onSave, matches = [] }) {
   const [champion,    setChampion]    = useState(special.champion    || '')
   const [subchampion, setSubchampion] = useState(special.subchampion || '')
   const [saving,  setSaving]  = useState(false)
   const [msg,     setMsg]     = useState('')
 
-  const isLocked = special.locked || isTournamentStarted()
+  const finalMatch = matches.find(m => m.phase === 'final')
+  const isLocked = special.locked || (finalMatch ? isMatchLocked(finalMatch) : isTournamentStarted())
 
   async function handleSave(e) {
     e.preventDefault()
@@ -52,7 +53,7 @@ export default function PreTournament({ special, onSave }) {
       <h2 className="font-bold text-gray-700 text-lg mb-1">Predicciones especiales</h2>
       <p className="text-sm text-gray-400 mb-5">
         +20 pts por campeón · +10 pts por subcampeón.
-        Se bloquean al inicio del torneo (11 Jun).
+        Se bloquean cuando empieza la Final.
       </p>
 
       <form onSubmit={handleSave} className="space-y-4">

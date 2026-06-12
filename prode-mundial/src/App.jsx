@@ -187,7 +187,7 @@ export default function App() {
           )
         })()}
         {activeTab === 'especiales' && (
-          <PreTournament special={special} onSave={saveSpecial} />
+          <PreTournament special={special} onSave={saveSpecial} matches={matches} />
         )}
         {activeTab === 'puntos' && <PointsInfo />}
         {activeTab === 'admin' && isAdmin && (

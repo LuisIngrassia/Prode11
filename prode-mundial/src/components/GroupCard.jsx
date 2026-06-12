@@ -35,47 +35,70 @@ function computeStandings(matches, predictions, groupTeams) {
 }
 
 function MatchRow({ match, prediction, onSave, color }) {
-  const [ph, setPh] = useState(prediction?.pred_home ?? '')
-  const [pa, setPa] = useState(prediction?.pred_away ?? '')
+  const [ph, setPh]       = useState(prediction?.pred_home ?? '')
+  const [pa, setPa]       = useState(prediction?.pred_away ?? '')
+  const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
 
-  const hasResult   = match.result_home != null && match.result_away != null
-  const inProgress  = isMatchInProgress(match)
-  const locked      = isMatchLocked(match)
+  const hasResult  = match.result_home != null && match.result_away != null
+  const inProgress = isMatchInProgress(match)
+  const locked     = isMatchLocked(match)
 
-  async function handleBlur() {
-    if (locked || ph === '' || pa === '') return
+  const isDirty = !locked && !hasResult && ph !== '' && pa !== '' && (
+    String(ph) !== String(prediction?.pred_home ?? '') ||
+    String(pa) !== String(prediction?.pred_away ?? '')
+  )
+  const hasSaved = prediction?.pred_home != null && !isDirty
+
+  async function handleSave() {
+    if (!isDirty) return
+    setSaving(true)
     await onSave(match.id, parseInt(ph), parseInt(pa))
+    setSaving(false)
+    setJustSaved(true)
+    setTimeout(() => setJustSaved(false), 2000)
   }
 
-  function pointsBadge() {
-    if (inProgress) return <span className="text-xs text-orange-500 font-bold animate-pulse">EN CURSO</span>
-    if (!hasResult || !prediction) return null
-    const pts = prediction.points
-    const cls = pts === 3 ? 'bg-green-500' : pts === 1 ? 'bg-yellow-400' : 'bg-gray-300 text-gray-600'
-    return (
-      <span className={`text-white text-xs font-bold px-1.5 py-0.5 rounded ${cls}`}>
-        {pts}p
-      </span>
+  function rightContent() {
+    if (inProgress) return <span className="text-xs text-orange-500 font-bold animate-pulse">EN VIVO</span>
+    if (hasResult && prediction?.points != null) {
+      const pts = prediction.points
+      const cls = pts === 3 ? 'bg-green-500' : pts === 1 ? 'bg-yellow-400' : 'bg-gray-300 text-gray-600'
+      return <span className={`text-white text-xs font-bold px-1.5 py-0.5 rounded ${cls}`}>{pts}p</span>
+    }
+    if (justSaved) return <span className="text-green-500 text-sm font-bold">✓</span>
+    if (isDirty) return (
+      <button onClick={handleSave} disabled={saving}
+              className="text-xs bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold px-2 py-0.5 rounded-lg transition disabled:opacity-50 whitespace-nowrap">
+        {saving ? '…' : 'Guardar'}
+      </button>
     )
+    if (hasSaved) return <span className="text-gray-300 text-sm">✓</span>
+    return null
   }
 
   return (
     <div className="flex items-center gap-1 py-1.5 px-2 rounded-lg hover:bg-gray-50 transition">
       {/* Local */}
       <div className="flex items-center gap-1 flex-1 justify-end min-w-0">
-        <span className="text-xs font-medium text-gray-700 text-right truncate leading-tight">
-          {match.home}
-        </span>
+        <span className="text-xs font-medium text-gray-700 text-right truncate leading-tight">{match.home}</span>
         <span className="text-sm flex-shrink-0">{FLAGS[match.home] || '🏳'}</span>
       </div>
 
       {/* Marcador */}
       <div className="flex items-center gap-0.5 mx-1 flex-shrink-0">
         {hasResult ? (
-          <div className="flex items-center gap-1 min-w-[52px] justify-center">
-            <span className="text-base font-black text-gray-800">{match.result_home}</span>
-            <span className="text-gray-300 font-bold">-</span>
-            <span className="text-base font-black text-gray-800">{match.result_away}</span>
+          <div className="flex flex-col items-center min-w-[52px]">
+            <div className="flex items-center gap-1">
+              <span className="text-base font-black text-gray-800">{match.result_home}</span>
+              <span className="text-gray-300 font-bold">-</span>
+              <span className="text-base font-black text-gray-800">{match.result_away}</span>
+            </div>
+            {prediction?.pred_home != null && (
+              <span className="text-[10px] text-gray-400 leading-tight">
+                {prediction.pred_home}-{prediction.pred_away}
+              </span>
+            )}
           </div>
         ) : locked ? (
           <div className="flex items-center gap-1 min-w-[52px] justify-center">
@@ -83,19 +106,13 @@ function MatchRow({ match, prediction, onSave, color }) {
           </div>
         ) : (
           <div className="flex items-center gap-0.5 min-w-[64px] justify-center">
-            <input
-              type="number" min="0" max="99"
-              value={ph}
-              onChange={e => setPh(e.target.value)}
-              onBlur={handleBlur}
+            <input type="number" min="0" max="99" value={ph}
+              onChange={e => { setPh(e.target.value); setJustSaved(false) }}
               className={`w-9 text-center border-2 rounded-md py-0.5 text-sm font-bold focus:outline-none focus:border-current ${color.border} bg-white text-gray-800`}
             />
             <span className="text-gray-300 font-bold text-xs">-</span>
-            <input
-              type="number" min="0" max="99"
-              value={pa}
-              onChange={e => setPa(e.target.value)}
-              onBlur={handleBlur}
+            <input type="number" min="0" max="99" value={pa}
+              onChange={e => { setPa(e.target.value); setJustSaved(false) }}
               className={`w-9 text-center border-2 rounded-md py-0.5 text-sm font-bold focus:outline-none focus:border-current ${color.border} bg-white text-gray-800`}
             />
           </div>
@@ -105,13 +122,11 @@ function MatchRow({ match, prediction, onSave, color }) {
       {/* Visitante */}
       <div className="flex items-center gap-1 flex-1 min-w-0">
         <span className="text-sm flex-shrink-0">{FLAGS[match.away] || '🏳'}</span>
-        <span className="text-xs font-medium text-gray-700 truncate leading-tight">
-          {match.away}
-        </span>
+        <span className="text-xs font-medium text-gray-700 truncate leading-tight">{match.away}</span>
       </div>
 
-      <div className="w-7 flex justify-center flex-shrink-0">
-        {pointsBadge()}
+      <div className="flex-shrink-0 flex justify-end" style={{ minWidth: 52 }}>
+        {rightContent()}
       </div>
     </div>
   )
