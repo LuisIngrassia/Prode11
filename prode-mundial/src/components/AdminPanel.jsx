@@ -2,6 +2,59 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import ResultsAdmin from './ResultsAdmin'
 
+function LigaCutEditor({ liga, onSave }) {
+  const [enabled, setEnabled] = useState((liga.organizer_cut ?? 0) > 0)
+  const [pct, setPct]         = useState(liga.organizer_cut > 0 ? liga.organizer_cut : 10)
+  const [saving, setSaving]   = useState(false)
+  const [msg,    setMsg]      = useState('')
+
+  async function handleSave() {
+    setSaving(true)
+    setMsg('')
+    const cut = enabled ? Math.max(0, Math.min(100, Number(pct))) : 0
+    const { error } = await onSave(liga.id, cut)
+    setSaving(false)
+    setMsg(error ? '✗ Error al guardar' : '✓ Guardado')
+    setTimeout(() => setMsg(''), 2000)
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+      <span className="text-xs text-gray-500 flex-shrink-0">Comisión:</span>
+      <button
+        type="button"
+        onClick={() => setEnabled(e => !e)}
+        className={`relative inline-flex w-9 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+      </button>
+      {enabled ? (
+        <>
+          <input
+            type="number" min="1" max="100" value={pct}
+            onChange={e => setPct(e.target.value)}
+            className="w-14 text-xs border border-gray-300 rounded px-2 py-0.5 text-center"
+          />
+          <span className="text-xs text-gray-500">%</span>
+        </>
+      ) : (
+        <span className="text-xs text-gray-400">Sin comisión</span>
+      )}
+      {msg ? (
+        <span className={`ml-auto text-xs font-bold ${msg.startsWith('✗') ? 'text-red-500' : 'text-green-600'}`}>{msg}</span>
+      ) : (
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="ml-auto text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg transition disabled:opacity-50"
+        >
+          {saving ? '…' : 'Guardar'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function LigasPendingPanel() {
   const [items,    setItems]    = useState([])
   const [ligas,    setLigas]    = useState([])
@@ -28,8 +81,9 @@ function LigasPendingPanel() {
   }, [])
 
   async function updateLigaCut(ligaId, cut) {
-    await supabase.from('ligas').update({ organizer_cut: cut }).eq('id', ligaId)
-    await load()
+    const { error } = await supabase.from('ligas').update({ organizer_cut: cut }).eq('id', ligaId)
+    if (!error) await load()
+    return { error }
   }
 
   async function approvePriceChange(ligaId, newAmount) {
@@ -76,54 +130,6 @@ function LigasPendingPanel() {
   }
 
   if (loading) return <p className="text-center text-gray-400 py-8 text-sm">Cargando...</p>
-
-  function LigaCutEditor({ liga }) {
-    const [enabled, setEnabled] = useState((liga.organizer_cut ?? 0) > 0)
-    const [pct, setPct]         = useState(liga.organizer_cut > 0 ? liga.organizer_cut : 10)
-    const [saving, setSaving]   = useState(false)
-    const [saved,  setSaved]    = useState(false)
-
-    async function handleSave() {
-      setSaving(true)
-      const cut = enabled ? Math.max(0, Math.min(100, Number(pct))) : 0
-      await updateLigaCut(liga.id, cut)
-      setSaving(false)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    }
-
-    return (
-      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-        <span className="text-xs text-gray-500 flex-shrink-0">Comisión:</span>
-        <button
-          type="button"
-          onClick={() => setEnabled(e => !e)}
-          className={`relative inline-flex w-9 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-green-500' : 'bg-gray-300'}`}
-        >
-          <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-        </button>
-        {enabled ? (
-          <>
-            <input
-              type="number" min="1" max="100" value={pct}
-              onChange={e => setPct(e.target.value)}
-              className="w-14 text-xs border border-gray-300 rounded px-2 py-0.5 text-center"
-            />
-            <span className="text-xs text-gray-500">%</span>
-          </>
-        ) : (
-          <span className="text-xs text-gray-400">Sin comisión</span>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="ml-auto text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg transition disabled:opacity-50"
-        >
-          {saving ? '…' : saved ? '✓ Listo' : 'Guardar'}
-        </button>
-      </div>
-    )
-  }
 
   function MemberRow({ m, isPending }) {
     const [busy, setBusy] = useState(false)
@@ -235,7 +241,7 @@ function LigasPendingPanel() {
                         {deleting === liga.id ? '…' : '🗑 Borrar'}
                       </button>
                     </div>
-                    {liga.entry_amount > 0 && <LigaCutEditor liga={liga} />}
+                    {liga.entry_amount > 0 && <LigaCutEditor liga={liga} onSave={updateLigaCut} />}
                   </div>
                 )
               })}
