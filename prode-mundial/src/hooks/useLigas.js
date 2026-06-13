@@ -6,6 +6,19 @@ function generateCode() {
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
+const PRIZE_SPLITS = {
+  1:  [100],
+  2:  [70, 30],
+  3:  [60, 25, 15],
+  4:  [50, 25, 15, 10],
+  5:  [45, 25, 15, 10, 5],
+  6:  [40, 20, 15, 10, 8, 7],
+  7:  [35, 20, 15, 10, 8, 7, 5],
+  8:  [32, 19, 14, 10, 9, 7, 5, 4],
+  9:  [30, 18, 13, 10, 9, 7, 6, 4, 3],
+  10: [28, 17, 12, 10, 9, 7, 6, 5, 4, 2],
+}
+
 // Hook: lista de ligas del usuario
 export function useLigas(userId) {
   const [ligas, setLigas]   = useState([])
@@ -31,7 +44,6 @@ export function useLigas(userId) {
       .select().single()
     if (error) return { error }
 
-    // Creator entra pero también debe pagar — paid: false como cualquier miembro
     await supabase.from('liga_members').insert({
       liga_id: data.id, user_id: userId, paid: false
     })
@@ -60,21 +72,23 @@ export function useLigas(userId) {
   return { ligas, loading, createLiga, joinLiga, refresh: load }
 }
 
-// Hook: detalle de una liga (miembros + operaciones del creator)
+// Hook: detalle de una liga (miembros + operaciones)
 export function useLigaDetail(ligaId, userId) {
+  const [liga, setLiga]         = useState(null)
   const [members, setMembers]   = useState([])
   const [profiles, setProfiles] = useState({})
   const [loading, setLoading]   = useState(true)
 
   const load = useCallback(async () => {
     if (!ligaId) return
-    const { data } = await supabase
-      .from('liga_members')
-      .select('*')
-      .eq('liga_id', ligaId)
-    setMembers(data || [])
+    const [{ data: ligaData }, { data: membersData }] = await Promise.all([
+      supabase.from('ligas').select('*').eq('id', ligaId).single(),
+      supabase.from('liga_members').select('*').eq('liga_id', ligaId),
+    ])
+    setLiga(ligaData)
+    setMembers(membersData || [])
 
-    const ids = (data || []).map(m => m.user_id)
+    const ids = (membersData || []).map(m => m.user_id)
     if (ids.length > 0) {
       const { data: profs } = await supabase
         .from('profiles').select('id, name').in('id', ids)
@@ -87,8 +101,8 @@ export function useLigaDetail(ligaId, userId) {
 
   useEffect(() => { load() }, [load])
 
-  const confirmed   = members.filter(m => m.paid)
-  const pending     = members.filter(m => !m.paid)
+  const confirmed    = members.filter(m => m.paid)
+  const pending      = members.filter(m => !m.paid)
   const myMembership = members.find(m => m.user_id === userId)
 
   async function confirmMember(memberId) {
@@ -111,22 +125,33 @@ export function useLigaDetail(ligaId, userId) {
     await load()
   }
 
+  async function updateSettings({ winner_count }) {
+    await supabase.from('ligas').update({ winner_count }).eq('id', ligaId)
+    await load()
+  }
+
+  async function requestPriceChange(newAmount) {
+    await supabase.from('ligas')
+      .update({ pending_entry_amount: newAmount })
+      .eq('id', ligaId)
+    await load()
+  }
+
   return {
-    members, profiles, loading,
+    liga, members, profiles, loading,
     confirmed, pending, myMembership,
     confirmMember, removeMember, declarePayment,
+    updateSettings, requestPriceChange,
     refresh: load,
   }
 }
 
 export function calcLigaPrizes(liga, confirmedCount) {
-  const gross = confirmedCount * (liga.entry_amount || 0)
-  const cut   = Math.floor(gross * (liga.organizer_cut ?? 0) / 100)
-  const net   = gross - cut
-  return {
-    gross, cut, net,
-    first:  Math.floor(net * 0.60),
-    second: Math.floor(net * 0.25),
-    third:  Math.floor(net * 0.15),
-  }
+  const gross  = confirmedCount * (liga.entry_amount || 0)
+  const cut    = Math.floor(gross * (liga.organizer_cut ?? 0) / 100)
+  const net    = gross - cut
+  const n      = Math.min(Math.max(liga.winner_count || 3, 1), 10)
+  const splits = PRIZE_SPLITS[n]
+  const prizes = splits.map(pct => Math.floor(net * pct / 100))
+  return { gross, cut, net, prizes, splits }
 }

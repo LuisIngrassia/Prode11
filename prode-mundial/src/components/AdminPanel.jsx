@@ -12,7 +12,7 @@ function LigasPendingPanel() {
   const load = useCallback(async () => {
     const [{ data: members }, { data: allLigas }] = await Promise.all([
       supabase.from('liga_members').select('*, ligas(id, nombre, entry_amount)').order('liga_id'),
-      supabase.from('ligas').select('id, nombre, entry_amount, codigo, organizer_cut').order('created_at'),
+      supabase.from('ligas').select('id, nombre, entry_amount, pending_entry_amount, codigo, organizer_cut').order('created_at'),
     ])
     setItems(members || [])
     setLigas(allLigas || [])
@@ -29,6 +29,23 @@ function LigasPendingPanel() {
 
   async function updateLigaCut(ligaId, cut) {
     await supabase.from('ligas').update({ organizer_cut: cut }).eq('id', ligaId)
+    await load()
+  }
+
+  async function approvePriceChange(ligaId, newAmount) {
+    await supabase.from('ligas')
+      .update({ entry_amount: newAmount, pending_entry_amount: null })
+      .eq('id', ligaId)
+    await supabase.from('liga_members')
+      .update({ paid: false, paid_at: null, note: null })
+      .eq('liga_id', ligaId)
+    await load()
+  }
+
+  async function rejectPriceChange(ligaId) {
+    await supabase.from('ligas')
+      .update({ pending_entry_amount: null })
+      .eq('id', ligaId)
     await load()
   }
 
@@ -137,8 +154,58 @@ function LigasPendingPanel() {
     )
   }
 
+  const pendingPriceChanges = ligas.filter(l => l.pending_entry_amount != null)
+
+  function fmtARS(n) { return '$' + Number(n).toLocaleString('es-AR') }
+
   return (
     <div className="space-y-5">
+
+      {/* Cambios de precio pendientes */}
+      {pendingPriceChanges.length > 0 && (
+        <div>
+          <h2 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+            💲 Cambios de precio pendientes
+            <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {pendingPriceChanges.length}
+            </span>
+          </h2>
+          <div className="space-y-2">
+            {pendingPriceChanges.map(liga => (
+              <div key={liga.id} className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800 truncate">{liga.nombre}</p>
+                    <p className="text-xs text-gray-500 font-mono mt-0.5">#{liga.codigo}</p>
+                    <p className="text-sm text-gray-700 mt-1">
+                      <span className="line-through text-gray-400">{fmtARS(liga.entry_amount || 0)}</span>
+                      {' → '}
+                      <span className="font-bold text-orange-700">{fmtARS(liga.pending_entry_amount)}</span>
+                    </p>
+                    <p className="text-xs text-orange-600 mt-1">
+                      Al aprobar se anulan todos los depósitos confirmados de esta sala.
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => approvePriceChange(liga.id, liga.pending_entry_amount)}
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                    >
+                      Aprobar
+                    </button>
+                    <button
+                      onClick={() => rejectPriceChange(liga.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Lista de salas con opción de borrar */}
       <div>

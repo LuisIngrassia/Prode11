@@ -53,6 +53,7 @@ export default function App() {
   const {
     myEntry, confirmed, pending,
     totalGross, organizerCut, netPool,
+    loading: entriesLoading,
     submitEntry, confirmEntry, rejectEntry,
   } = useEntries(user?.id)
 
@@ -144,13 +145,14 @@ export default function App() {
                     totalGross={totalGross}
                     organizerCut={organizerCut}
                     netPool={netPool}
+                    loading={entriesLoading}
                     onSubmit={submitEntry}
                   />
                 </>
               ) : (
                 <>
                   {/* CTA arriba de todo si nunca depositó */}
-                  {!myEntry && (
+                  {!myEntry && !entriesLoading && (
                     <div className="bg-green-600 text-white rounded-2xl p-5">
                       <p className="text-2xl font-black mb-1">💰 Entrar al pozo</p>
                       <p className="text-sm text-green-100 mb-0.5">
@@ -170,6 +172,7 @@ export default function App() {
                     totalGross={totalGross}
                     organizerCut={organizerCut}
                     netPool={netPool}
+                    loading={entriesLoading}
                     onSubmit={submitEntry}
                   />
 
