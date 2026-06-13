@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import ResultsAdmin from './ResultsAdmin'
+import { calcLigaPrizes } from '../hooks/useLigas'
 
 function LigaCutEditor({ liga, onSave }) {
   const [enabled, setEnabled] = useState((liga.organizer_cut ?? 0) > 0)
@@ -56,25 +57,30 @@ function LigaCutEditor({ liga, onSave }) {
 }
 
 function LigasPendingPanel() {
-  const [items,    setItems]    = useState([])
-  const [ligas,    setLigas]    = useState([])
-  const [profiles, setProfiles] = useState({})
-  const [loading,  setLoading]  = useState(true)
-  const [deleting, setDeleting] = useState(null)
+  const [items,      setItems]      = useState([])
+  const [ligas,      setLigas]      = useState([])
+  const [profiles,   setProfiles]   = useState({})
+  const [leaderboard, setLeaderboard] = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [deleting,   setDeleting]   = useState(null)
+  const [expanded,   setExpanded]   = useState({})
 
   const load = useCallback(async () => {
-    const [{ data: members }, { data: allLigas }] = await Promise.all([
+    const [{ data: members }, { data: allLigas }, { data: lboard }] = await Promise.all([
       supabase.from('liga_members').select('*, ligas(id, nombre, entry_amount)').order('liga_id'),
-      supabase.from('ligas').select('id, nombre, entry_amount, pending_entry_amount, codigo, organizer_cut').order('created_at'),
+      supabase.from('ligas').select('id, nombre, entry_amount, pending_entry_amount, codigo, organizer_cut, winner_count').order('created_at'),
+      supabase.from('leaderboard').select('*'),
     ])
     setItems(members || [])
     setLigas(allLigas || [])
+    setLeaderboard(lboard || [])
 
     const ids = (members || []).map(m => m.user_id)
     if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+      const { data: profs } = await supabase
+        .from('profiles').select('id, name, alias_pago, telefono').in('id', ids)
       const map = {}
-      profs?.forEach(p => { map[p.id] = p.name })
+      profs?.forEach(p => { map[p.id] = p })
       setProfiles(map)
     }
     setLoading(false)
@@ -136,7 +142,7 @@ function LigasPendingPanel() {
     return (
       <div className={`flex items-center gap-3 p-3 rounded-xl border ${isPending ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-800 truncate">{profiles[m.user_id] || '—'}</p>
+          <p className="font-semibold text-gray-800 truncate">{profiles[m.user_id]?.name || '—'}</p>
           <p className="text-xs text-gray-500 truncate">
             {m.ligas?.nombre} · {m.note || 'Sin referencia'}
           </p>
@@ -213,35 +219,106 @@ function LigasPendingPanel() {
         </div>
       )}
 
-      {/* Lista de salas con opción de borrar */}
+      {/* Lista de salas */}
       <div>
         <h2 className="font-bold text-gray-700 mb-3">🏟 Salas ({ligas.length})</h2>
         {ligas.length === 0
           ? <p className="text-sm text-gray-400 bg-white border border-gray-100 rounded-xl p-4 text-center">No hay salas creadas</p>
           : <div className="space-y-2">
               {ligas.map(liga => {
-                const memberCount = items.filter(m => m.liga_id === liga.id).length
-                const confirmedCount = items.filter(m => m.liga_id === liga.id && m.paid).length
+                const ligaMembers    = items.filter(m => m.liga_id === liga.id)
+                const confirmedMembers = ligaMembers.filter(m => m.paid)
+                const confirmedIds   = new Set(confirmedMembers.map(m => m.user_id))
+                const ligaBoard      = leaderboard.filter(p => confirmedIds.has(p.id))
+                const { net, prizes } = calcLigaPrizes(liga, confirmedMembers.length)
+                const isOpen         = expanded[liga.id]
+                const MEDALS         = ['🥇', '🥈', '🥉']
+
                 return (
-                  <div key={liga.id} className="p-3 bg-white rounded-xl border border-gray-100">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-800 truncate">{liga.nombre}</p>
-                        <p className="text-xs text-gray-400 font-mono">
-                          #{liga.codigo}
-                          {liga.entry_amount > 0 && ` · $${Number(liga.entry_amount).toLocaleString('es-AR')}`}
-                          {` · ${confirmedCount}/${memberCount} confirmados`}
-                        </p>
+                  <div key={liga.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                    {/* Header de la sala */}
+                    <div className="p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-800 truncate">{liga.nombre}</p>
+                          <p className="text-xs text-gray-400 font-mono">
+                            #{liga.codigo}
+                            {liga.entry_amount > 0 && ` · $${Number(liga.entry_amount).toLocaleString('es-AR')}`}
+                            {` · ${confirmedMembers.length}/${ligaMembers.length} confirmados`}
+                            {liga.entry_amount > 0 && ` · pozo $${net.toLocaleString('es-AR')}`}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          {liga.entry_amount > 0 && confirmedMembers.length > 0 && (
+                            <button
+                              onClick={() => setExpanded(p => ({ ...p, [liga.id]: !p[liga.id] }))}
+                              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${isOpen ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                            >
+                              {isOpen ? 'Cerrar' : '📊 Ver tabla'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteLiga(liga.id, liga.nombre)}
+                            disabled={deleting === liga.id}
+                            className="text-xs bg-red-100 hover:bg-red-500 hover:text-white text-red-600 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                          >
+                            {deleting === liga.id ? '…' : '🗑'}
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => deleteLiga(liga.id, liga.nombre)}
-                        disabled={deleting === liga.id}
-                        className="text-xs bg-red-100 hover:bg-red-500 hover:text-white text-red-600 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50 flex-shrink-0"
-                      >
-                        {deleting === liga.id ? '…' : '🗑 Borrar'}
-                      </button>
+                      {liga.entry_amount > 0 && <LigaCutEditor liga={liga} onSave={updateLigaCut} />}
                     </div>
-                    {liga.entry_amount > 0 && <LigaCutEditor liga={liga} onSave={updateLigaCut} />}
+
+                    {/* Tabla expandida */}
+                    {isOpen && (
+                      <div className="border-t border-gray-100 p-3 bg-gray-50 space-y-2">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                          Tabla — ganadores y depósitos
+                        </p>
+                        {ligaBoard.length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-2">Sin posiciones aún</p>
+                        ) : (
+                          ligaBoard.slice(0, liga.winner_count || 3).map((player, i) => {
+                            const prof  = profiles[player.id]
+                            const prize = prizes[i] ?? 0
+                            return (
+                              <div key={player.id} className="bg-white rounded-xl border border-gray-100 p-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-lg flex-shrink-0">
+                                    {MEDALS[i] ?? `${i + 1}°`}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-gray-800 text-sm">{prof?.name || player.name || '—'}</p>
+                                    <p className="text-xs text-gray-500">{player.total_pts} pts</p>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="font-black text-green-700">${prize.toLocaleString('es-AR')}</p>
+                                    <p className="text-xs text-gray-400">a depositar</p>
+                                  </div>
+                                </div>
+                                {(prof?.alias_pago || prof?.telefono) && (
+                                  <div className="mt-2 pt-2 border-t border-gray-50 flex flex-wrap gap-3">
+                                    {prof.alias_pago && (
+                                      <span className="text-xs text-gray-600 flex items-center gap-1">
+                                        💳 <span className="font-mono font-bold">{prof.alias_pago}</span>
+                                      </span>
+                                    )}
+                                    {prof.telefono && (
+                                      <span className="text-xs text-gray-600 flex items-center gap-1">
+                                        📱 {prof.telefono}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {!prof?.alias_pago && !prof?.telefono && (
+                                  <p className="mt-1 text-xs text-orange-500">Sin datos de contacto cargados</p>
+                                )}
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}

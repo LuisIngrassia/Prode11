@@ -3,6 +3,7 @@ const TABS = [
   { id: 'salas',      label: 'Salas',      icon: '🏟' },
   { id: 'especiales', label: 'Gran Final', icon: '⭐' },
   { id: 'puntos',     label: 'Puntos',     icon: 'ℹ' },
+  { id: 'perfil',     label: 'Mi Perfil',  icon: '👤' },
 ]
 
 export default function Header({ name, onSignOut, activeTab, onTabChange, isAdmin }) {

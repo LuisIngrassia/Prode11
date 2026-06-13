@@ -16,6 +16,7 @@ import LigasHome from './components/LigasHome'
 import LigaView from './components/LigaView'
 import OnboardingTutorial from './components/OnboardingTutorial'
 import PrediccionesTab from './components/PrediccionesTab'
+import PerfilTab from './components/PerfilTab'
 
 export default function App() {
   const { user, loading, signIn, signUp, signOut } = useAuth()
@@ -41,7 +42,7 @@ export default function App() {
     }
   }, [user])
 
-  const profile  = useProfile(user?.id)
+  const { profile, saveProfile } = useProfile(user?.id)
   const { matches, refreshMatches } = useMatches()
   const { predictions, savePrediction } = usePredictions(user?.id)
   const { special, saveSpecial }        = useSpecialPredictions(user?.id)
@@ -108,6 +109,7 @@ export default function App() {
           <PreTournament special={special} onSave={saveSpecial} matches={matches} />
         )}
         {activeTab === 'puntos' && <PointsInfo />}
+        {activeTab === 'perfil' && <PerfilTab profile={profile} onSave={saveProfile} />}
         {activeTab === 'admin' && isAdmin && (
           <AdminPanel
             entries={[...confirmed, ...pending]}
