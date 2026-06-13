@@ -19,7 +19,7 @@ import PrediccionesTab from './components/PrediccionesTab'
 import PerfilTab from './components/PerfilTab'
 
 export default function App() {
-  const { user, loading, signIn, signUp, signOut } = useAuth()
+  const { user, loading, isRecovery, signIn, signUp, signOut, resetPassword, updatePassword } = useAuth()
   const [activeTab, setActiveTab]       = useState('grupos')
   const [selectedLiga, setSelectedLiga] = useState(null)
   const [initialJoinCode, setInitialJoinCode] = useState('')
@@ -65,7 +65,15 @@ export default function App() {
     )
   }
 
-  if (!user) return <LoginScreen onSignIn={signIn} onSignUp={signUp} />
+  if (!user || isRecovery) return (
+    <LoginScreen
+      onSignIn={signIn}
+      onSignUp={signUp}
+      onResetPassword={resetPassword}
+      onUpdatePassword={updatePassword}
+      isRecovery={isRecovery}
+    />
+  )
 
   const userName = profile?.name || user.user_metadata?.name || user.email
   const isAdmin  = profile?.is_admin === true
