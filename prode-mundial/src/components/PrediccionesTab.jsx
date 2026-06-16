@@ -34,6 +34,11 @@ function NextMatchCard({ match, prediction, onSave }) {
     return () => clearInterval(t)
   }, [])
 
+  useEffect(() => {
+    setPh(prediction?.pred_home != null ? String(prediction.pred_home) : '')
+    setPa(prediction?.pred_away != null ? String(prediction.pred_away) : '')
+  }, [prediction?.pred_home, prediction?.pred_away])
+
   const startUTC  = getMatchStartUTC(match)
   const msLeft    = startUTC ? startUTC.getTime() - now : null
   const countdown = msLeft != null && msLeft > 0 ? formatCountdown(msLeft) : null
