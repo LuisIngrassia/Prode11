@@ -69,7 +69,7 @@ function MatchRow({ match, prediction, onSave, color }) {
     if (justSaved) return <span className="text-green-500 text-sm font-bold">✓</span>
     if (isDirty) return (
       <button onClick={handleSave} disabled={saving}
-              className="text-xs bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold px-2 py-0.5 rounded-lg transition disabled:opacity-50 whitespace-nowrap">
+              className="text-xs bg-yellow-500 hover:bg-green-600 active:bg-green-700 text-white font-bold px-2 py-0.5 rounded-lg transition disabled:opacity-50 whitespace-nowrap">
         {saving ? '…' : 'Guardar'}
       </button>
     )

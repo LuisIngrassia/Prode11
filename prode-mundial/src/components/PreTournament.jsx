@@ -10,8 +10,8 @@ export default function PreTournament({ special, onSave, matches = [] }) {
   const [saving,  setSaving]  = useState(false)
   const [msg,     setMsg]     = useState('')
 
-  const finalMatch = matches.find(m => m.phase === 'final')
-  const isLocked = special.locked || (finalMatch ? isMatchLocked(finalMatch) : isTournamentStarted())
+  const firstR16 = matches.filter(m => m.phase === 'r16').sort((a, b) => a.match_number - b.match_number)[0]
+  const isLocked = special.locked || (firstR16 ? isMatchLocked(firstR16) : isTournamentStarted())
 
   async function handleSave(e) {
     e.preventDefault()
@@ -53,7 +53,7 @@ export default function PreTournament({ special, onSave, matches = [] }) {
       <h2 className="font-bold text-gray-700 text-lg mb-1">Predicciones especiales</h2>
       <p className="text-sm text-gray-400 mb-5">
         +20 pts por campeón · +10 pts por subcampeón.
-        Se bloquean cuando empieza la Final.
+        Se bloquean cuando arrancan los 16avos.
       </p>
 
       <form onSubmit={handleSave} className="space-y-4">
