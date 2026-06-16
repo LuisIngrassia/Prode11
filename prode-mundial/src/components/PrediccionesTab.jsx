@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import GroupStage from './GroupStage'
 import Bracket from './Bracket'
 import { FLAGS } from '../data/teams'
-import { getMatchStartUTC, isMatchLocked } from '../utils/matchTime'
+import { getMatchStartUTC, isMatchLocked, isMatchInProgress } from '../utils/matchTime'
 
 const PHASE_LABEL = {
   r32: 'Ronda de 32', r16: 'Octavos de Final',
@@ -20,6 +20,70 @@ function formatCountdown(ms) {
   if (d > 0) return `${d}d ${h}h ${String(m).padStart(2, '0')}m`
   if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
   return `${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+}
+
+function LiveMatchCard({ match, prediction }) {
+  const label = match.group_name
+    ? `Grupo ${match.group_name}`
+    : (PHASE_LABEL[match.phase] || '')
+
+  const hasPred = prediction?.pred_home != null
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+      <div className="bg-orange-500 px-4 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span className="text-xs font-black uppercase tracking-widest text-white">
+            En vivo
+          </span>
+        </div>
+        {label && (
+          <span className="text-xs font-bold text-white bg-white/20 px-2 py-0.5 rounded-full">
+            {label}
+          </span>
+        )}
+      </div>
+
+      <div className="px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col items-center flex-1 gap-1">
+            <span className="text-4xl leading-none">{FLAGS[match.home] || '🏳'}</span>
+            <span className="text-sm font-bold text-gray-800 text-center leading-tight">{match.home}</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-1">
+            {hasPred ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-11 h-9 flex items-center justify-center border-2 border-gray-200 rounded-lg text-lg font-black text-gray-400 bg-gray-50">
+                    {prediction.pred_home}
+                  </span>
+                  <span className="text-gray-300 font-bold text-base">-</span>
+                  <span className="w-11 h-9 flex items-center justify-center border-2 border-gray-200 rounded-lg text-lg font-black text-gray-400 bg-gray-50">
+                    {prediction.pred_away}
+                  </span>
+                </div>
+                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide flex items-center gap-1">
+                  🔒 tu predicción
+                </span>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-2xl">🔒</span>
+                <span className="text-[10px] text-gray-400">sin predicción</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col items-center flex-1 gap-1">
+            <span className="text-4xl leading-none">{FLAGS[match.away] || '🏳'}</span>
+            <span className="text-sm font-bold text-gray-800 text-center leading-tight">{match.away}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function NextMatchCard({ match, prediction, onSave }) {
@@ -159,6 +223,10 @@ function NextMatchCard({ match, prediction, onSave }) {
 export default function PrediccionesTab({ matches, predictions, onSave }) {
   const [sub, setSub] = useState('grupos')
 
+  const liveMatch = matches
+    .filter(m => isMatchInProgress(m))
+    .sort((a, b) => (a.match_number ?? 0) - (b.match_number ?? 0))[0]
+
   const nextMatch = matches
     .filter(m => !isMatchLocked(m))
     .sort((a, b) => {
@@ -169,6 +237,12 @@ export default function PrediccionesTab({ matches, predictions, onSave }) {
 
   return (
     <div>
+      {liveMatch && (
+        <LiveMatchCard
+          match={liveMatch}
+          prediction={predictions?.[liveMatch.id]}
+        />
+      )}
       {nextMatch && (
         <NextMatchCard
           match={nextMatch}
