@@ -39,15 +39,11 @@ function MatchRow({ match, prediction, onSave, color }) {
   const [pa, setPa]       = useState(prediction?.pred_away ?? '')
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
-  const [synced, setSynced] = useState(prediction != null)
 
   useEffect(() => {
-    if (!synced && prediction?.pred_home != null) {
-      setPh(prediction.pred_home)
-      setPa(prediction.pred_away ?? '')
-      setSynced(true)
-    }
-  }, [prediction?.pred_home, prediction?.pred_away, synced])
+    setPh(prediction?.pred_home != null ? String(prediction.pred_home) : '')
+    setPa(prediction?.pred_away != null ? String(prediction.pred_away) : '')
+  }, [prediction?.pred_home, prediction?.pred_away])
 
   const hasResult  = match.result_home != null && match.result_away != null
   const inProgress = isMatchInProgress(match)
