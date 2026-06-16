@@ -10,5 +10,15 @@ export function useProfile(userId) {
       .then(({ data }) => setProfile(data))
   }, [userId])
 
-  return profile
+  async function saveProfile(updates) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', userId)
+      .select().single()
+    if (!error && data) setProfile(data)
+    return { error }
+  }
+
+  return { profile, saveProfile }
 }

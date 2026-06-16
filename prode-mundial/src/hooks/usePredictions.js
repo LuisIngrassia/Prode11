@@ -6,12 +6,15 @@ export function usePredictions(userId) {
 
   useEffect(() => {
     if (!userId) return
+    let cancelled = false
     supabase.from('predictions').select('*').eq('user_id', userId)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (cancelled || error) return
         const map = {}
         data?.forEach(p => { map[p.match_id] = p })
         setPredictions(map)
       })
+    return () => { cancelled = true }
   }, [userId])
 
   async function savePrediction(matchId, predHome, predAway) {

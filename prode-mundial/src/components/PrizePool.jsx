@@ -140,7 +140,7 @@ function PrizeRow({ rank, player, prize, amount, multiplier, returnRatio }) {
   )
 }
 
-export default function PrizePool({ leaderboard, myEntry, confirmed, pending, totalGross, organizerCut, netPool, onSubmit }) {
+export default function PrizePool({ leaderboard, myEntry, confirmed, pending, totalGross, organizerCut, netPool, loading, onSubmit }) {
   const prizes = calculatePrizes(confirmed, leaderboard, netPool)
   const participantsWithEntry = confirmed.length
 
@@ -149,10 +149,10 @@ export default function PrizePool({ leaderboard, myEntry, confirmed, pending, to
       {/* Header del pozo */}
       <div className="bg-gray-900 rounded-2xl p-5 text-white">
         <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Pozo acumulado</p>
-        <p className="text-5xl font-black tracking-tight">{fmt(netPool)}</p>
-        <p className="text-gray-400 text-sm mt-1">
-          {fmt(totalGross)} recaudados · {fmt(organizerCut)} admin (10%)
-        </p>
+        {loading
+          ? <div className="h-12 flex items-center"><div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin" /></div>
+          : <p className="text-5xl font-black tracking-tight">{fmt(netPool)}</p>
+        }
 
         <div className="grid grid-cols-3 gap-3 mt-4">
           <div className="bg-gray-800 rounded-xl p-3 text-center">

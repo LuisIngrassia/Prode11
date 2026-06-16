@@ -1,34 +1,111 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import ResultsAdmin from './ResultsAdmin'
+import { calcLigaPrizes } from '../hooks/useLigas'
+
+function LigaCutEditor({ liga, onSave }) {
+  const [enabled, setEnabled] = useState((liga.organizer_cut ?? 0) > 0)
+  const [pct, setPct]         = useState(liga.organizer_cut > 0 ? liga.organizer_cut : 10)
+  const [saving, setSaving]   = useState(false)
+  const [msg,    setMsg]      = useState('')
+
+  async function handleSave() {
+    setSaving(true)
+    setMsg('')
+    const cut = enabled ? Math.max(0, Math.min(100, Number(pct))) : 0
+    const { error } = await onSave(liga.id, cut)
+    setSaving(false)
+    setMsg(error ? '✗ Error al guardar' : '✓ Guardado')
+    setTimeout(() => setMsg(''), 2000)
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+      <span className="text-xs text-gray-500 flex-shrink-0">Comisión:</span>
+      <button
+        type="button"
+        onClick={() => setEnabled(e => !e)}
+        className={`relative inline-flex w-9 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+      </button>
+      {enabled ? (
+        <>
+          <input
+            type="number" min="1" max="100" value={pct}
+            onChange={e => setPct(e.target.value)}
+            className="w-14 text-xs border border-gray-300 rounded px-2 py-0.5 text-center"
+          />
+          <span className="text-xs text-gray-500">%</span>
+        </>
+      ) : (
+        <span className="text-xs text-gray-400">Sin comisión</span>
+      )}
+      {msg ? (
+        <span className={`ml-auto text-xs font-bold ${msg.startsWith('✗') ? 'text-red-500' : 'text-green-600'}`}>{msg}</span>
+      ) : (
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="ml-auto text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg transition disabled:opacity-50"
+        >
+          {saving ? '…' : 'Guardar'}
+        </button>
+      )}
+    </div>
+  )
+}
 
 function LigasPendingPanel() {
-  const [items,    setItems]    = useState([])
-  const [ligas,    setLigas]    = useState([])
-  const [profiles, setProfiles] = useState({})
-  const [loading,  setLoading]  = useState(true)
-  const [deleting, setDeleting] = useState(null)
+  const [items,      setItems]      = useState([])
+  const [ligas,      setLigas]      = useState([])
+  const [profiles,   setProfiles]   = useState({})
+  const [leaderboard, setLeaderboard] = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [deleting,   setDeleting]   = useState(null)
+  const [expanded,   setExpanded]   = useState({})
 
   const load = useCallback(async () => {
-    const [{ data: members }, { data: allLigas }] = await Promise.all([
+    const [{ data: members }, { data: allLigas }, { data: lboard }] = await Promise.all([
       supabase.from('liga_members').select('*, ligas(id, nombre, entry_amount)').order('liga_id'),
-      supabase.from('ligas').select('id, nombre, entry_amount, codigo, organizer_cut').order('created_at'),
+      supabase.from('ligas').select('id, nombre, entry_amount, pending_entry_amount, codigo, organizer_cut, winner_count').order('created_at'),
+      supabase.from('leaderboard').select('*'),
     ])
     setItems(members || [])
     setLigas(allLigas || [])
+    setLeaderboard(lboard || [])
 
     const ids = (members || []).map(m => m.user_id)
     if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+      const { data: profs } = await supabase
+        .from('profiles').select('id, name, alias_pago, telefono').in('id', ids)
       const map = {}
-      profs?.forEach(p => { map[p.id] = p.name })
+      profs?.forEach(p => { map[p.id] = p })
       setProfiles(map)
     }
     setLoading(false)
   }, [])
 
   async function updateLigaCut(ligaId, cut) {
-    await supabase.from('ligas').update({ organizer_cut: cut }).eq('id', ligaId)
+    const { error } = await supabase.from('ligas').update({ organizer_cut: cut }).eq('id', ligaId)
+    if (!error) await load()
+    return { error }
+  }
+
+  async function approvePriceChange(ligaId, newAmount) {
+    await supabase.from('ligas')
+      .update({ entry_amount: newAmount, pending_entry_amount: null })
+      .eq('id', ligaId)
+    await supabase.from('liga_members')
+      .update({ paid: false, paid_at: null, note: null })
+      .eq('liga_id', ligaId)
+    await load()
+  }
+
+  async function rejectPriceChange(ligaId) {
+    await supabase.from('ligas')
+      .update({ pending_entry_amount: null })
+      .eq('id', ligaId)
     await load()
   }
 
@@ -60,60 +137,12 @@ function LigasPendingPanel() {
 
   if (loading) return <p className="text-center text-gray-400 py-8 text-sm">Cargando...</p>
 
-  function LigaCutEditor({ liga }) {
-    const [enabled, setEnabled] = useState((liga.organizer_cut ?? 0) > 0)
-    const [pct, setPct]         = useState(liga.organizer_cut > 0 ? liga.organizer_cut : 10)
-    const [saving, setSaving]   = useState(false)
-    const [saved,  setSaved]    = useState(false)
-
-    async function handleSave() {
-      setSaving(true)
-      const cut = enabled ? Math.max(0, Math.min(100, Number(pct))) : 0
-      await updateLigaCut(liga.id, cut)
-      setSaving(false)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    }
-
-    return (
-      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-        <span className="text-xs text-gray-500 flex-shrink-0">Comisión:</span>
-        <button
-          type="button"
-          onClick={() => setEnabled(e => !e)}
-          className={`relative inline-flex w-9 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-green-500' : 'bg-gray-300'}`}
-        >
-          <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-        </button>
-        {enabled ? (
-          <>
-            <input
-              type="number" min="1" max="100" value={pct}
-              onChange={e => setPct(e.target.value)}
-              className="w-14 text-xs border border-gray-300 rounded px-2 py-0.5 text-center"
-            />
-            <span className="text-xs text-gray-500">%</span>
-          </>
-        ) : (
-          <span className="text-xs text-gray-400">Sin comisión</span>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="ml-auto text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg transition disabled:opacity-50"
-        >
-          {saving ? '…' : saved ? '✓ Listo' : 'Guardar'}
-        </button>
-      </div>
-    )
-  }
-
   function MemberRow({ m, isPending }) {
     const [busy, setBusy] = useState(false)
     return (
       <div className={`flex items-center gap-3 p-3 rounded-xl border ${isPending ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-800 truncate">{profiles[m.user_id] || '—'}</p>
+          <p className="font-semibold text-gray-800 truncate">{profiles[m.user_id]?.name || '—'}</p>
           <p className="text-xs text-gray-500 truncate">
             {m.ligas?.nombre} · {m.note || 'Sin referencia'}
           </p>
@@ -137,38 +166,159 @@ function LigasPendingPanel() {
     )
   }
 
+  const pendingPriceChanges = ligas.filter(l => l.pending_entry_amount != null)
+
+  function fmtARS(n) { return '$' + Number(n).toLocaleString('es-AR') }
+
   return (
     <div className="space-y-5">
 
-      {/* Lista de salas con opción de borrar */}
+      {/* Cambios de precio pendientes */}
+      {pendingPriceChanges.length > 0 && (
+        <div>
+          <h2 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+            💲 Cambios de precio pendientes
+            <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {pendingPriceChanges.length}
+            </span>
+          </h2>
+          <div className="space-y-2">
+            {pendingPriceChanges.map(liga => (
+              <div key={liga.id} className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800 truncate">{liga.nombre}</p>
+                    <p className="text-xs text-gray-500 font-mono mt-0.5">#{liga.codigo}</p>
+                    <p className="text-sm text-gray-700 mt-1">
+                      <span className="line-through text-gray-400">{fmtARS(liga.entry_amount || 0)}</span>
+                      {' → '}
+                      <span className="font-bold text-orange-700">{fmtARS(liga.pending_entry_amount)}</span>
+                    </p>
+                    <p className="text-xs text-orange-600 mt-1">
+                      Al aprobar se anulan todos los depósitos confirmados de esta sala.
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => approvePriceChange(liga.id, liga.pending_entry_amount)}
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                    >
+                      Aprobar
+                    </button>
+                    <button
+                      onClick={() => rejectPriceChange(liga.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lista de salas */}
       <div>
         <h2 className="font-bold text-gray-700 mb-3">🏟 Salas ({ligas.length})</h2>
         {ligas.length === 0
           ? <p className="text-sm text-gray-400 bg-white border border-gray-100 rounded-xl p-4 text-center">No hay salas creadas</p>
           : <div className="space-y-2">
               {ligas.map(liga => {
-                const memberCount = items.filter(m => m.liga_id === liga.id).length
-                const confirmedCount = items.filter(m => m.liga_id === liga.id && m.paid).length
+                const ligaMembers    = items.filter(m => m.liga_id === liga.id)
+                const confirmedMembers = ligaMembers.filter(m => m.paid)
+                const confirmedIds   = new Set(confirmedMembers.map(m => m.user_id))
+                const ligaBoard      = leaderboard.filter(p => confirmedIds.has(p.id))
+                const { net, prizes } = calcLigaPrizes(liga, confirmedMembers.length)
+                const isOpen         = expanded[liga.id]
+                const MEDALS         = ['🥇', '🥈', '🥉']
+
                 return (
-                  <div key={liga.id} className="p-3 bg-white rounded-xl border border-gray-100">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-800 truncate">{liga.nombre}</p>
-                        <p className="text-xs text-gray-400 font-mono">
-                          #{liga.codigo}
-                          {liga.entry_amount > 0 && ` · $${Number(liga.entry_amount).toLocaleString('es-AR')}`}
-                          {` · ${confirmedCount}/${memberCount} confirmados`}
-                        </p>
+                  <div key={liga.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                    {/* Header de la sala */}
+                    <div className="p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-800 truncate">{liga.nombre}</p>
+                          <p className="text-xs text-gray-400 font-mono">
+                            #{liga.codigo}
+                            {liga.entry_amount > 0 && ` · $${Number(liga.entry_amount).toLocaleString('es-AR')}`}
+                            {` · ${confirmedMembers.length}/${ligaMembers.length} confirmados`}
+                            {liga.entry_amount > 0 && ` · pozo $${net.toLocaleString('es-AR')}`}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          {liga.entry_amount > 0 && confirmedMembers.length > 0 && (
+                            <button
+                              onClick={() => setExpanded(p => ({ ...p, [liga.id]: !p[liga.id] }))}
+                              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${isOpen ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                            >
+                              {isOpen ? 'Cerrar' : '📊 Ver tabla'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteLiga(liga.id, liga.nombre)}
+                            disabled={deleting === liga.id}
+                            className="text-xs bg-red-100 hover:bg-red-500 hover:text-white text-red-600 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                          >
+                            {deleting === liga.id ? '…' : '🗑'}
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => deleteLiga(liga.id, liga.nombre)}
-                        disabled={deleting === liga.id}
-                        className="text-xs bg-red-100 hover:bg-red-500 hover:text-white text-red-600 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50 flex-shrink-0"
-                      >
-                        {deleting === liga.id ? '…' : '🗑 Borrar'}
-                      </button>
+                      {liga.entry_amount > 0 && <LigaCutEditor liga={liga} onSave={updateLigaCut} />}
                     </div>
-                    {liga.entry_amount > 0 && <LigaCutEditor liga={liga} />}
+
+                    {/* Tabla expandida */}
+                    {isOpen && (
+                      <div className="border-t border-gray-100 p-3 bg-gray-50 space-y-2">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                          Tabla — ganadores y depósitos
+                        </p>
+                        {ligaBoard.length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-2">Sin posiciones aún</p>
+                        ) : (
+                          ligaBoard.slice(0, liga.winner_count || 3).map((player, i) => {
+                            const prof  = profiles[player.id]
+                            const prize = prizes[i] ?? 0
+                            return (
+                              <div key={player.id} className="bg-white rounded-xl border border-gray-100 p-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-lg flex-shrink-0">
+                                    {MEDALS[i] ?? `${i + 1}°`}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-gray-800 text-sm">{prof?.name || player.name || '—'}</p>
+                                    <p className="text-xs text-gray-500">{player.total_pts} pts</p>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="font-black text-green-700">${prize.toLocaleString('es-AR')}</p>
+                                    <p className="text-xs text-gray-400">a depositar</p>
+                                  </div>
+                                </div>
+                                {(prof?.alias_pago || prof?.telefono) && (
+                                  <div className="mt-2 pt-2 border-t border-gray-50 flex flex-wrap gap-3">
+                                    {prof.alias_pago && (
+                                      <span className="text-xs text-gray-600 flex items-center gap-1">
+                                        💳 <span className="font-mono font-bold">{prof.alias_pago}</span>
+                                      </span>
+                                    )}
+                                    {prof.telefono && (
+                                      <span className="text-xs text-gray-600 flex items-center gap-1">
+                                        📱 {prof.telefono}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {!prof?.alias_pago && !prof?.telefono && (
+                                  <p className="mt-1 text-xs text-orange-500">Sin datos de contacto cargados</p>
+                                )}
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}

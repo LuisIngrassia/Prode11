@@ -32,9 +32,13 @@ export function useEntries(userId) {
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
+    if (!userId) return
     supabase.from('entries').select('*').order('created_at')
-      .then(({ data }) => { setEntries(data || []); setLoading(false) })
-  }, [])
+      .then(({ data }) => {
+        if (data) setEntries(data)
+        setLoading(false)
+      })
+  }, [userId])
 
   const confirmed = entries.filter(e => e.confirmed)
   const pending   = entries.filter(e => !e.confirmed)

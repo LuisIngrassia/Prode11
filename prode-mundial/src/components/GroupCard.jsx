@@ -1,16 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FLAGS, GROUPS, GROUP_COLORS } from '../data/teams'
 import { isMatchLocked, isMatchInProgress } from '../utils/matchTime'
 
-function computeStandings(matches, predictions, groupTeams) {
+function computeStandings(matches, groupTeams) {
   const stats = {}
   groupTeams.forEach(t => {
     stats[t] = { name: t, pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0 }
   })
 
   matches.forEach(match => {
-    const rh = match.result_home ?? predictions[match.id]?.pred_home
-    const ra = match.result_away ?? predictions[match.id]?.pred_away
+    const rh = match.result_home
+    const ra = match.result_away
     if (rh == null || ra == null) return
 
     const h = stats[match.home]
@@ -39,6 +39,15 @@ function MatchRow({ match, prediction, onSave, color }) {
   const [pa, setPa]       = useState(prediction?.pred_away ?? '')
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
+  const [synced, setSynced] = useState(prediction != null)
+
+  useEffect(() => {
+    if (!synced && prediction?.pred_home != null) {
+      setPh(prediction.pred_home)
+      setPa(prediction.pred_away ?? '')
+      setSynced(true)
+    }
+  }, [prediction?.pred_home, prediction?.pred_away, synced])
 
   const hasResult  = match.result_home != null && match.result_away != null
   const inProgress = isMatchInProgress(match)
@@ -135,7 +144,7 @@ function MatchRow({ match, prediction, onSave, color }) {
 export default function GroupCard({ group, matches, predictions, onSave }) {
   const color = GROUP_COLORS[group] || GROUP_COLORS.A
   const groupTeams = GROUPS[group] || []
-  const standings = computeStandings(matches, predictions, groupTeams)
+  const standings = computeStandings(matches, groupTeams)
 
   const md = [matches.slice(0, 2), matches.slice(2, 4), matches.slice(4, 6)]
 
