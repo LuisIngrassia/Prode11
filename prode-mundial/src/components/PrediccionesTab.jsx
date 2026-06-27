@@ -223,33 +223,42 @@ function NextMatchCard({ match, prediction, onSave }) {
 export default function PrediccionesTab({ matches, predictions, onSave }) {
   const [sub, setSub] = useState('grupos')
 
-  const liveMatch = matches
+  const liveMatches = matches
     .filter(m => isMatchInProgress(m))
-    .sort((a, b) => (a.match_number ?? 0) - (b.match_number ?? 0))[0]
+    .sort((a, b) => (a.match_number ?? 0) - (b.match_number ?? 0))
 
-  const nextMatch = matches
-    .filter(m => !isMatchLocked(m))
+  const liveIds = new Set(liveMatches.map(m => m.id))
+
+  const upcoming = matches
+    .filter(m => !isMatchLocked(m) && !liveIds.has(m.id))
     .sort((a, b) => {
       const ta = getMatchStartUTC(a)?.getTime() ?? Infinity
       const tb = getMatchStartUTC(b)?.getTime() ?? Infinity
       return ta - tb
-    })[0]
+    })
+
+  const nextStart = upcoming.length ? (getMatchStartUTC(upcoming[0])?.getTime() ?? Infinity) : null
+  const nextMatches = nextStart != null
+    ? upcoming.filter(m => (getMatchStartUTC(m)?.getTime() ?? Infinity) === nextStart)
+    : []
 
   return (
     <div>
-      {liveMatch && (
+      {liveMatches.map(m => (
         <LiveMatchCard
-          match={liveMatch}
-          prediction={predictions?.[liveMatch.id]}
+          key={m.id}
+          match={m}
+          prediction={predictions?.[m.id]}
         />
-      )}
-      {nextMatch && (
+      ))}
+      {nextMatches.map(m => (
         <NextMatchCard
-          match={nextMatch}
-          prediction={predictions?.[nextMatch.id]}
+          key={m.id}
+          match={m}
+          prediction={predictions?.[m.id]}
           onSave={onSave}
         />
-      )}
+      ))}
 
       <div className="flex gap-1 bg-gray-200 p-1 rounded-xl mb-4">
         {[
