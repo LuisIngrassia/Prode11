@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { FLAGS } from '../data/teams'
+import { FLAGS, isRealTeam } from '../data/teams'
+import { getPlaceholderUpdates, getThirdPlaceRanking, parseThirdCombo, isUnresolvedThirdSlot } from '../utils/knockoutFill'
 
 const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const KNOCKOUT_PHASES = [
@@ -95,8 +96,164 @@ function MatchResultRow({ match, onSaved }) {
   )
 }
 
+function ThirdPlaceRankingPanel({ matches }) {
+  const { rows, groupsComplete, groupsTotal } = getThirdPlaceRanking(matches)
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl p-3">
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+        Ranking de terceros ({groupsComplete}/{groupsTotal} grupos finalizados)
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-xs text-gray-400">Todavía no hay grupos finalizados.</p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-400 uppercase">
+              <th className="text-left pb-1 font-medium">Equipo</th>
+              <th className="pb-1 font-medium w-8 text-center">Grupo</th>
+              <th className="pb-1 font-medium w-8 text-center">Pts</th>
+              <th className="pb-1 font-medium w-8 text-center">DG</th>
+              <th className="pb-1 font-medium w-8 text-center">GF</th>
+              <th className="pb-1 font-medium w-16 text-center">Estado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(r => (
+              <tr key={r.group} className={r.qualifies ? 'font-semibold text-gray-800' : 'text-gray-400'}>
+                <td className="py-1 flex items-center gap-1">
+                  <span>{FLAGS[r.team] || '🏳'}</span> {r.team}
+                </td>
+                <td className="text-center">{r.group}</td>
+                <td className="text-center">{r.pts}</td>
+                <td className="text-center">{r.dg}</td>
+                <td className="text-center">{r.gf}</td>
+                <td className="text-center">
+                  {r.qualifies
+                    ? <span className="text-green-600">Clasifica</span>
+                    : <span>Eliminado</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p className="text-[10px] text-gray-400 mt-2">
+        La FIFA decide con su tabla oficial (Anexo C) a qué cruce exacto va cada tercero clasificado.
+        Usá este ranking como guía y asigná manualmente cada equipo en su cruce "3º (...)" más abajo.
+      </p>
+    </div>
+  )
+}
+
+function ThirdPlaceSlot({ match, field, placeholder, matches, onSaved }) {
+  const combo = parseThirdCombo(placeholder) || []
+  const { rows } = getThirdPlaceRanking(matches)
+
+  const usedNames = new Set(
+    matches.filter(m => m.phase === 'r32').flatMap(m => [m.home, m.away]).filter(isRealTeam)
+  )
+
+  const options = rows.filter(r => r.qualifies && combo.includes(r.group) && !usedNames.has(r.team))
+
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleAssign() {
+    if (!value) return
+    setSaving(true)
+    await supabase.from('matches').update({ [field]: value }).eq('id', match.id)
+    setSaving(false)
+    onSaved()
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <select
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        className="text-xs border border-gray-200 rounded-lg px-2 py-1 flex-1"
+      >
+        <option value="">{placeholder}</option>
+        {options.map(o => (
+          <option key={o.team} value={o.team}>{o.team} (3º {o.group})</option>
+        ))}
+      </select>
+      <button
+        onClick={handleAssign}
+        disabled={!value || saving}
+        className="text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold px-2 py-1 rounded-lg"
+      >
+        {saving ? '…' : 'Asignar'}
+      </button>
+    </div>
+  )
+}
+
+function ScheduleEditor({ match, onSaved }) {
+  const [date, setDate] = useState(match.date || '')
+  const [time, setTime] = useState(match.match_time || '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    setDate(match.date || '')
+    setTime(match.match_time || '')
+  }, [match.date, match.match_time])
+
+  const isDirty = date !== (match.date || '') || time !== (match.match_time || '')
+
+  async function handleSave() {
+    if (!isDirty) return
+    setSaving(true)
+    await supabase.from('matches').update({ date, match_time: time }).eq('id', match.id)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+    onSaved()
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+      <span className="text-[10px] text-gray-400 font-bold w-7 flex-shrink-0">P{match.match_number}</span>
+      <input
+        type="text" placeholder="ej. 4 Jul" value={date}
+        onChange={e => { setDate(e.target.value); setSaved(false) }}
+        className="text-xs border border-gray-200 rounded-lg px-2 py-1 w-20"
+      />
+      <input
+        type="text" placeholder="HH:MM" value={time}
+        onChange={e => { setTime(e.target.value); setSaved(false) }}
+        className="text-xs border border-gray-200 rounded-lg px-2 py-1 w-16"
+      />
+      <button
+        onClick={handleSave}
+        disabled={!isDirty || saving}
+        className="text-xs bg-gray-900 hover:bg-gray-700 disabled:opacity-30 text-white font-bold px-2 py-1 rounded-lg flex-shrink-0"
+      >
+        {saving ? '…' : saved ? '✓' : 'Guardar horario'}
+      </button>
+    </div>
+  )
+}
+
 export default function ResultsAdmin({ matches, onSaved }) {
   const [selected, setSelected] = useState('A')
+  const filling = useRef(false)
+
+  useEffect(() => {
+    if (filling.current) return
+    const updates = getPlaceholderUpdates(matches)
+    if (updates.length === 0) return
+
+    filling.current = true
+    Promise.all(
+      updates.map(u => supabase.from('matches').update({ [u.field]: u.value }).eq('id', u.id))
+    ).then(() => {
+      filling.current = false
+      onSaved()
+    })
+  }, [matches, onSaved])
 
   const isGroup   = GROUP_LETTERS.includes(selected)
   const filtered  = isGroup
@@ -105,6 +262,9 @@ export default function ResultsAdmin({ matches, onSaved }) {
 
   const withResult    = filtered.filter(m => m.result_home != null)
   const withoutResult = filtered.filter(m => m.result_home == null)
+  const unresolvedThirds = selected === 'r32'
+    ? filtered.filter(m => isUnresolvedThirdSlot(m.home) || isUnresolvedThirdSlot(m.away))
+    : []
 
   return (
     <div className="space-y-4">
@@ -144,6 +304,35 @@ export default function ResultsAdmin({ matches, onSaved }) {
         </div>
       </div>
 
+      {selected === 'r32' && (
+        <>
+          <ThirdPlaceRankingPanel matches={matches} />
+
+          {unresolvedThirds.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-2">
+                Cruces de tercero sin asignar ({unresolvedThirds.length})
+              </p>
+              <div className="space-y-2">
+                {unresolvedThirds.map(m => (
+                  <div key={m.id} className="bg-orange-50 border border-orange-100 rounded-xl p-2">
+                    <p className="text-xs text-gray-600">
+                      P{m.match_number}: <span className="font-semibold">{m.home}</span> vs <span className="font-semibold">{m.away}</span>
+                    </p>
+                    {isUnresolvedThirdSlot(m.home) && (
+                      <ThirdPlaceSlot match={m} field="home" placeholder={m.home} matches={matches} onSaved={onSaved} />
+                    )}
+                    {isUnresolvedThirdSlot(m.away) && (
+                      <ThirdPlaceSlot match={m} field="away" placeholder={m.away} matches={matches} onSaved={onSaved} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Partidos sin resultado */}
       {withoutResult.length > 0 && (
         <div>
@@ -152,7 +341,10 @@ export default function ResultsAdmin({ matches, onSaved }) {
           </p>
           <div className="space-y-2">
             {withoutResult.map(m => (
-              <MatchResultRow key={m.id} match={m} onSaved={onSaved} />
+              <div key={m.id} className={!isGroup ? 'bg-white border border-gray-100 rounded-xl overflow-hidden' : ''}>
+                {!isGroup && <ScheduleEditor match={m} onSaved={onSaved} />}
+                <MatchResultRow match={m} onSaved={onSaved} />
+              </div>
             ))}
           </div>
         </div>
@@ -166,7 +358,10 @@ export default function ResultsAdmin({ matches, onSaved }) {
           </p>
           <div className="space-y-2">
             {withResult.map(m => (
-              <MatchResultRow key={m.id} match={m} onSaved={onSaved} />
+              <div key={m.id} className={!isGroup ? 'bg-white border border-gray-100 rounded-xl overflow-hidden' : ''}>
+                {!isGroup && <ScheduleEditor match={m} onSaved={onSaved} />}
+                <MatchResultRow match={m} onSaved={onSaved} />
+              </div>
             ))}
           </div>
         </div>

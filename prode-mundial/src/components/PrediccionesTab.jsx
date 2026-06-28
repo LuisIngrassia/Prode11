@@ -230,16 +230,12 @@ export default function PrediccionesTab({ matches, predictions, onSave }) {
   const liveIds = new Set(liveMatches.map(m => m.id))
 
   const upcoming = matches
-    .filter(m => !isMatchLocked(m) && !liveIds.has(m.id))
-    .sort((a, b) => {
-      const ta = getMatchStartUTC(a)?.getTime() ?? Infinity
-      const tb = getMatchStartUTC(b)?.getTime() ?? Infinity
-      return ta - tb
-    })
+    .filter(m => !isMatchLocked(m) && !liveIds.has(m.id) && getMatchStartUTC(m) != null)
+    .sort((a, b) => getMatchStartUTC(a).getTime() - getMatchStartUTC(b).getTime())
 
-  const nextStart = upcoming.length ? (getMatchStartUTC(upcoming[0])?.getTime() ?? Infinity) : null
+  const nextStart = upcoming.length ? getMatchStartUTC(upcoming[0]).getTime() : null
   const nextMatches = nextStart != null
-    ? upcoming.filter(m => (getMatchStartUTC(m)?.getTime() ?? Infinity) === nextStart)
+    ? upcoming.filter(m => getMatchStartUTC(m).getTime() === nextStart)
     : []
 
   return (
