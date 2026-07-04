@@ -13,10 +13,10 @@ const KNOCKOUT_PHASES = [
   { key: 'final', label: 'Final' },
 ]
 
-async function saveResult(matchId, resultHome, resultAway) {
+async function saveResult(matchId, resultHome, resultAway, penaltyWinner) {
   const { error } = await supabase
     .from('matches')
-    .update({ result_home: resultHome, result_away: resultAway })
+    .update({ result_home: resultHome, result_away: resultAway, penalty_winner: penaltyWinner })
     .eq('id', matchId)
   if (error) return error
 
@@ -28,13 +28,21 @@ function MatchResultRow({ match, onSaved }) {
   const hasResult = match.result_home != null && match.result_away != null
   const [rh, setRh] = useState(match.result_home ?? '')
   const [ra, setRa] = useState(match.result_away ?? '')
+  const [penalty, setPenalty] = useState(match.penalty_winner || '')
   const [saving, setSaving] = useState(false)
-  const [status, setStatus] = useState(hasResult ? 'saved' : 'idle')
+
+  const isKnockout   = match.phase !== 'groups'
+  const isTie        = rh !== '' && ra !== '' && parseInt(rh) === parseInt(ra)
+  const needsPenalty = isKnockout && isTie
+  const canSave      = rh !== '' && ra !== '' && (!needsPenalty || penalty !== '')
+
+  const initialComplete = hasResult && !(match.result_home === match.result_away && isKnockout && !match.penalty_winner)
+  const [status, setStatus] = useState(initialComplete ? 'saved' : 'idle')
 
   async function handleSave() {
-    if (rh === '' || ra === '') return
+    if (!canSave) return
     setSaving(true)
-    const error = await saveResult(match.id, parseInt(rh), parseInt(ra))
+    const error = await saveResult(match.id, parseInt(rh), parseInt(ra), needsPenalty ? penalty : null)
     setSaving(false)
     if (error) { setStatus('error'); return }
     setStatus('saved')
@@ -42,56 +50,90 @@ function MatchResultRow({ match, onSaved }) {
   }
 
   return (
-    <div className={`flex items-center gap-2 p-3 rounded-xl border transition ${
+    <div className={`rounded-xl border transition ${
       status === 'saved' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100'
     }`}>
-      <span className="text-xs text-gray-400 w-8 text-center flex-shrink-0 font-mono">
-        {match.match_number}
-      </span>
+      <div className="flex items-center gap-2 p-3">
+        <span className="text-xs text-gray-400 w-8 text-center flex-shrink-0 font-mono">
+          {match.match_number}
+        </span>
 
-      {/* Local */}
-      <div className="flex items-center gap-1 flex-1 justify-end min-w-0">
-        <span className="text-xs font-medium text-gray-700 truncate text-right">{match.home}</span>
-        <span className="text-sm flex-shrink-0">{FLAGS[match.home] || ''}</span>
+        {/* Local */}
+        <div className="flex items-center gap-1 flex-1 justify-end min-w-0">
+          <span className="text-xs font-medium text-gray-700 truncate text-right">{match.home}</span>
+          <span className="text-sm flex-shrink-0">{FLAGS[match.home] || ''}</span>
+        </div>
+
+        {/* Inputs */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <input
+            type="number" min="0" max="99"
+            value={rh}
+            onChange={e => { setRh(e.target.value); setPenalty(''); setStatus('idle') }}
+            className="w-10 text-center border-2 border-gray-300 rounded-lg py-1 text-sm font-bold focus:outline-none focus:border-blue-400"
+          />
+          <span className="text-gray-400 font-bold text-xs">-</span>
+          <input
+            type="number" min="0" max="99"
+            value={ra}
+            onChange={e => { setRa(e.target.value); setPenalty(''); setStatus('idle') }}
+            className="w-10 text-center border-2 border-gray-300 rounded-lg py-1 text-sm font-bold focus:outline-none focus:border-blue-400"
+          />
+        </div>
+
+        {/* Visitante */}
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <span className="text-sm flex-shrink-0">{FLAGS[match.away] || ''}</span>
+          <span className="text-xs font-medium text-gray-700 truncate">{match.away}</span>
+        </div>
+
+        {/* Botón */}
+        <button
+          onClick={handleSave}
+          disabled={saving || !canSave}
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex-shrink-0 ${
+            status === 'saved'
+              ? 'bg-green-500 text-white'
+              : status === 'error'
+              ? 'bg-red-500 text-white'
+              : 'bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40'
+          }`}
+        >
+          {saving ? '…' : status === 'saved' ? '✓' : status === 'error' ? '!' : 'Guardar'}
+        </button>
       </div>
 
-      {/* Inputs */}
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <input
-          type="number" min="0" max="99"
-          value={rh}
-          onChange={e => { setRh(e.target.value); setStatus('idle') }}
-          className="w-10 text-center border-2 border-gray-300 rounded-lg py-1 text-sm font-bold focus:outline-none focus:border-blue-400"
-        />
-        <span className="text-gray-400 font-bold text-xs">-</span>
-        <input
-          type="number" min="0" max="99"
-          value={ra}
-          onChange={e => { setRa(e.target.value); setStatus('idle') }}
-          className="w-10 text-center border-2 border-gray-300 rounded-lg py-1 text-sm font-bold focus:outline-none focus:border-blue-400"
-        />
-      </div>
-
-      {/* Visitante */}
-      <div className="flex items-center gap-1 flex-1 min-w-0">
-        <span className="text-sm flex-shrink-0">{FLAGS[match.away] || ''}</span>
-        <span className="text-xs font-medium text-gray-700 truncate">{match.away}</span>
-      </div>
-
-      {/* Botón */}
-      <button
-        onClick={handleSave}
-        disabled={saving || rh === '' || ra === ''}
-        className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex-shrink-0 ${
-          status === 'saved'
-            ? 'bg-green-500 text-white'
-            : status === 'error'
-            ? 'bg-red-500 text-white'
-            : 'bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40'
-        }`}
-      >
-        {saving ? '…' : status === 'saved' ? '✓' : status === 'error' ? '!' : 'Guardar'}
-      </button>
+      {needsPenalty && (
+        <div className="flex items-center gap-2 px-3 pb-3 -mt-1">
+          <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider flex-shrink-0">
+            Empate, ¿quién pasa por penales?
+          </span>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => { setPenalty(match.home); setStatus('idle') }}
+              className={`text-xs font-bold px-2 py-1 rounded-lg border transition ${
+                penalty === match.home
+                  ? 'bg-orange-500 border-orange-500 text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-orange-300'
+              }`}
+            >
+              {FLAGS[match.home] || ''} {match.home}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPenalty(match.away); setStatus('idle') }}
+              className={`text-xs font-bold px-2 py-1 rounded-lg border transition ${
+                penalty === match.away
+                  ? 'bg-orange-500 border-orange-500 text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-orange-300'
+              }`}
+            >
+              {FLAGS[match.away] || ''} {match.away}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -4,6 +4,30 @@ import { computeStandings, isGroupComplete } from './standings'
 const FIRST_RE  = /^1º Grupo ([A-L])$/
 const SECOND_RE = /^2º Grupo ([A-L])$/
 const THIRD_RE  = /^3º \(([A-L](?:\/[A-L])*)\)$/
+const WINNER_RE = /^Gan\. P(\d+)$/
+const LOSER_RE  = /^Per\. P(\d+)$/
+
+// Ganador de un partido: si empata, define el ganador de penales cargado a mano.
+export function getMatchWinner(match) {
+  if (match.result_home == null || match.result_away == null) return null
+  if (match.result_home > match.result_away) return match.home
+  if (match.result_away > match.result_home) return match.away
+  return match.penalty_winner || null
+}
+
+export function getMatchLoser(match) {
+  const winner = getMatchWinner(match)
+  if (!winner) return null
+  return winner === match.home ? match.away : match.home
+}
+
+// Un cruce de eliminación quedó empatado y todavía no se cargó quién pasó por penales.
+export function isPendingPenalty(match) {
+  return match.phase !== 'groups'
+    && match.result_home != null && match.result_away != null
+    && match.result_home === match.result_away
+    && !match.penalty_winner
+}
 
 function groupStandings(matches, letter) {
   const groupMatches = matches.filter(m => m.group_name === letter)
@@ -37,6 +61,33 @@ export function getPlaceholderUpdates(matches) {
         if (secondMatch) {
           const st = standingsFor(secondMatch[1])
           if (st) updates.push({ id: m.id, field, value: st[1].name })
+        }
+      })
+    })
+
+  // Ganador/perdedor de un cruce anterior avanza al siguiente ("Gan. P89" / "Per. P101").
+  const byNumber = {}
+  matches.forEach(m => { if (m.match_number != null) byNumber[m.match_number] = m })
+
+  matches
+    .filter(m => m.phase !== 'groups')
+    .forEach(m => {
+      ;[['home', m.home], ['away', m.away]].forEach(([field, value]) => {
+        if (isRealTeam(value)) return
+
+        const winnerMatch = value?.match(WINNER_RE)
+        if (winnerMatch) {
+          const ref = byNumber[Number(winnerMatch[1])]
+          const winner = ref ? getMatchWinner(ref) : null
+          if (winner) updates.push({ id: m.id, field, value: winner })
+          return
+        }
+
+        const loserMatch = value?.match(LOSER_RE)
+        if (loserMatch) {
+          const ref = byNumber[Number(loserMatch[1])]
+          const loser = ref ? getMatchLoser(ref) : null
+          if (loser) updates.push({ id: m.id, field, value: loser })
         }
       })
     })

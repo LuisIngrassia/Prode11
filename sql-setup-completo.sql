@@ -22,6 +22,7 @@ create table if not exists public.matches (
   away         text not null,
   result_home  int,
   result_away  int,
+  penalty_winner text,
   phase        text default 'groups',
   venue        text
 );
